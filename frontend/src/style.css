@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #0052ff;
+  --color-brand-active: #003ecc;
+  --color-brand-disabled: #a8b8cc;
+  --color-ink: #0a0b0d;
+  --color-body: #5b616e;
+  --color-muted: #7c828a;
+  --color-muted-soft: #a8acb3;
+  --color-hairline: #dee1e6;
+  --color-hairline-soft: #eef0f3;
+  --color-canvas: #ffffff;
+  --color-surface-soft: #f7f7f7;
+  --color-surface-strong: #eef0f3;
+  --color-surface-dark: #0a0b0d;
+  --color-surface-dark-elevated: #16181c;
+  --color-on-primary: #ffffff;
+  --color-on-dark: #ffffff;
+  --color-on-dark-soft: #a8acb3;
+  --color-up: #cf202f;
+  --color-down: #05b169;
+  --color-accent-yellow: #f4b000;
+
+  --radius-pill: 9999px;
+  --radius-xl: 24px;
+
+  --font-sans: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Utility helpers matching the final design system */
+.btn-primary {
+  @apply bg-brand text-white rounded-pill h-11 px-5 font-semibold transition-colors;
+}
+.btn-primary:hover {
+  @apply bg-brand-active;
+}
+.btn-secondary {
+  @apply bg-surface-strong text-ink rounded-pill h-11 px-5 font-semibold transition-colors;
+}
+.btn-secondary:hover {
+  @apply bg-hairline-soft;
+}
+.input {
+  @apply bg-canvas border border-hairline rounded-xl h-12 px-4 text-ink outline-none transition-all;
+}
+.input:focus {
+  @apply border-2 border-brand px-[15px];
+}
+.search-pill {
+  @apply bg-surface-strong rounded-pill h-11 px-5 outline-none;
+}
+.card {
+  @apply bg-canvas rounded-3xl border border-hairline;
+}
