@@ -47,3 +47,15 @@ class NavHistoryItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class FundCompareItem(FundDetail):
+    manager: Optional[str]
+    nav_history: List[NavHistoryItem]
+
+    class Config:
+        from_attributes = True
+
+
+class FundCompareResponse(BaseModel):
+    funds: List[FundCompareItem]
