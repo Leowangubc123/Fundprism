@@ -3,15 +3,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.database import get_db
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
+from app.models.user import User
 from app.schemas import FundCompareItem, FundCompareResponse, FundDetail, FundListItem, NavHistoryItem
 from app.security import get_current_user
 
 router = APIRouter(prefix="/funds", tags=["funds"])
+
+COMPARE_HISTORY_DAYS = 90
 
 
 def _latest_performance_subquery(db: Session):
@@ -25,10 +28,9 @@ def _latest_performance_subquery(db: Session):
     )
 
 
-@router.get("", response_model=List[FundListItem])
-def list_funds(q: str = "", db: Session = Depends(get_db), user=Depends(get_current_user)):
+def _base_fund_query(db: Session):
     latest = _latest_performance_subquery(db)
-    query = (
+    return (
         db.query(Fund, FundCode, FundPerformance)
         .join(FundCode, FundCode.fund_id == Fund.id)
         .filter(FundCode.is_primary.is_(True))
@@ -42,6 +44,15 @@ def list_funds(q: str = "", db: Session = Depends(get_db), user=Depends(get_curr
             & (FundPerformance.date == latest.c.max_date),
         )
     )
+
+
+@router.get("", response_model=List[FundListItem])
+def list_funds(
+    q: str = "",
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    query = _base_fund_query(db)
     if q:
         query = query.filter(
             (Fund.name.ilike(f"%{q}%")) | (FundCode.code.ilike(f"%{q}%"))
@@ -63,24 +74,12 @@ def list_funds(q: str = "", db: Session = Depends(get_db), user=Depends(get_curr
 
 
 @router.get("/{fund_id}", response_model=FundDetail)
-def get_fund(fund_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    latest = _latest_performance_subquery(db)
-    row = (
-        db.query(Fund, FundCode, FundPerformance)
-        .join(FundCode, FundCode.fund_id == Fund.id)
-        .filter(FundCode.is_primary.is_(True))
-        .filter(Fund.id == fund_id)
-        .outerjoin(
-            latest,
-            latest.c.fund_code_id == FundCode.id,
-        )
-        .outerjoin(
-            FundPerformance,
-            (FundPerformance.fund_code_id == FundCode.id)
-            & (FundPerformance.date == latest.c.max_date),
-        )
-        .first()
-    )
+def get_fund(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    row = _base_fund_query(db).filter(Fund.id == fund_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Fund not found")
     fund, code, perf = row
@@ -95,7 +94,11 @@ def get_fund(fund_id: UUID, db: Session = Depends(get_db), user=Depends(get_curr
 
 
 @router.get("/{fund_id}/nav", response_model=List[NavHistoryItem])
-def get_nav_history(fund_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_nav_history(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     fund = db.query(Fund).filter(Fund.id == fund_id).first()
     if not fund:
         raise HTTPException(status_code=404, detail="Fund not found")
@@ -119,43 +122,62 @@ def get_nav_history(fund_id: UUID, db: Session = Depends(get_db), user=Depends(g
 def compare_funds(
     ids: List[UUID] = Query(default_factory=list),
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     if not ids:
-        raise HTTPException(status_code=400, detail="至少需要选择一只基金")
+        raise HTTPException(status_code=400, detail="At least one fund is required")
     if len(ids) > 5:
-        raise HTTPException(status_code=400, detail="最多只能选择 5 只基金进行对比")
+        raise HTTPException(status_code=400, detail="Up to 5 funds can be compared")
 
-    latest = _latest_performance_subquery(db)
-    rows = (
-        db.query(Fund, FundCode, FundPerformance)
-        .join(FundCode, FundCode.fund_id == Fund.id)
-        .filter(FundCode.is_primary.is_(True))
-        .filter(Fund.id.in_(ids))
-        .outerjoin(
-            latest,
-            latest.c.fund_code_id == FundCode.id,
-        )
-        .outerjoin(
+    rows = _base_fund_query(db).filter(Fund.id.in_(ids)).all()
+
+    found_ids = {fund.id for fund, _, _ in rows}
+    missing_ids = set(ids) - found_ids
+    if missing_ids:
+        raise HTTPException(status_code=404, detail="One or more funds not found")
+
+    fund_by_id = {}
+    code_by_id = {}
+    perf_by_id = {}
+    for fund, code, perf in rows:
+        fund_by_id[fund.id] = fund
+        code_by_id[fund.id] = code
+        perf_by_id[fund.id] = perf
+
+    code_ids = [code.id for code in code_by_id.values()]
+    ranked = (
+        db.query(
             FundPerformance,
-            (FundPerformance.fund_code_id == FundCode.id)
-            & (FundPerformance.date == latest.c.max_date),
+            func.row_number()
+            .over(
+                partition_by=FundPerformance.fund_code_id,
+                order_by=FundPerformance.date.asc(),
+            )
+            .label("rn"),
         )
+        .filter(FundPerformance.fund_code_id.in_(code_ids))
+        .subquery()
+    )
+    FundPerformanceAlias = aliased(FundPerformance, ranked)
+    history_rows = (
+        db.query(FundPerformanceAlias)
+        .filter(ranked.c.rn <= COMPARE_HISTORY_DAYS)
+        .order_by(FundPerformanceAlias.fund_code_id, FundPerformanceAlias.date)
         .all()
     )
 
+    history_by_code = {}
+    for row in history_rows:
+        history_by_code.setdefault(row.fund_code_id, []).append(row)
+
     result = []
-    for fund, code, perf in rows:
-        history_rows = (
-            db.query(FundPerformance)
-            .filter(FundPerformance.fund_code_id == code.id)
-            .order_by(FundPerformance.date)
-            .limit(90)
-            .all()
-        )
+    for fund_id in ids:
+        fund = fund_by_id[fund_id]
+        code = code_by_id[fund_id]
+        perf = perf_by_id[fund_id]
         nav_history = [
             NavHistoryItem(date=r.date, nav=float(r.nav))
-            for r in history_rows
+            for r in history_by_code.get(code.id, [])
             if r.nav is not None
         ]
         result.append(
