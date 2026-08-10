@@ -151,7 +151,7 @@ def compare_funds(
             func.row_number()
             .over(
                 partition_by=FundPerformance.fund_code_id,
-                order_by=FundPerformance.date.asc(),
+                order_by=FundPerformance.date.desc(),
             )
             .label("rn"),
         )
@@ -177,7 +177,10 @@ def compare_funds(
         perf = perf_by_id[fund_id]
         nav_history = [
             NavHistoryItem(date=r.date, nav=float(r.nav))
-            for r in history_by_code.get(code.id, [])
+            for r in sorted(
+                history_by_code.get(code.id, []),
+                key=lambda x: x.date,
+            )
             if r.nav is not None
         ]
         result.append(
