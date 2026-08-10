@@ -17,6 +17,10 @@ router = APIRouter(prefix="/funds", tags=["funds"])
 COMPARE_HISTORY_DAYS = 90
 
 
+def _to_float(value):
+    return float(value) if value is not None else None
+
+
 def _latest_performance_subquery(db: Session):
     return (
         db.query(
@@ -66,61 +70,16 @@ def list_funds(
                 name=fund.name,
                 code=code.code,
                 category=fund.category,
-                nav=float(perf.nav) if perf and perf.nav is not None else None,
-                daily_return=float(perf.daily_return) if perf and perf.daily_return is not None else None,
+                nav=_to_float(perf.nav) if perf else None,
+                daily_return=_to_float(perf.daily_return) if perf else None,
             )
         )
     return out
 
 
-@router.get("/{fund_id}", response_model=FundDetail)
-def get_fund(
-    fund_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    row = _base_fund_query(db).filter(Fund.id == fund_id).first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Fund not found")
-    fund, code, perf = row
-    return FundDetail(
-        id=fund.id,
-        name=fund.name,
-        code=code.code,
-        category=fund.category,
-        nav=float(perf.nav) if perf and perf.nav is not None else None,
-        daily_return=float(perf.daily_return) if perf and perf.daily_return is not None else None,
-    )
-
-
-@router.get("/{fund_id}/nav", response_model=List[NavHistoryItem])
-def get_nav_history(
-    fund_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    fund = db.query(Fund).filter(Fund.id == fund_id).first()
-    if not fund:
-        raise HTTPException(status_code=404, detail="Fund not found")
-    primary_code = (
-        db.query(FundCode)
-        .filter(FundCode.fund_id == fund_id, FundCode.is_primary.is_(True))
-        .first()
-    )
-    if not primary_code:
-        return []
-    rows = (
-        db.query(FundPerformance)
-        .filter(FundPerformance.fund_code_id == primary_code.id)
-        .order_by(FundPerformance.date)
-        .all()
-    )
-    return [NavHistoryItem(date=r.date, nav=float(r.nav)) for r in rows if r.nav is not None]
-
-
 @router.get("/compare", response_model=FundCompareResponse)
 def compare_funds(
-    ids: List[UUID] = Query(default_factory=list),
+    ids: List[UUID] = Query(default=[]),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -177,10 +136,7 @@ def compare_funds(
         perf = perf_by_id[fund_id]
         nav_history = [
             NavHistoryItem(date=r.date, nav=float(r.nav))
-            for r in sorted(
-                history_by_code.get(code.id, []),
-                key=lambda x: x.date,
-            )
+            for r in history_by_code.get(code.id, [])
             if r.nav is not None
         ]
         result.append(
@@ -189,11 +145,56 @@ def compare_funds(
                 name=fund.name,
                 code=code.code,
                 category=fund.category,
-                nav=float(perf.nav) if perf and perf.nav is not None else None,
-                daily_return=float(perf.daily_return) if perf and perf.daily_return is not None else None,
+                nav=_to_float(perf.nav) if perf else None,
+                daily_return=_to_float(perf.daily_return) if perf else None,
                 manager=fund.manager,
                 nav_history=nav_history,
             )
         )
 
     return {"funds": result}
+
+
+@router.get("/{fund_id}", response_model=FundDetail)
+def get_fund(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    row = _base_fund_query(db).filter(Fund.id == fund_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Fund not found")
+    fund, code, perf = row
+    return FundDetail(
+        id=fund.id,
+        name=fund.name,
+        code=code.code,
+        category=fund.category,
+        nav=_to_float(perf.nav) if perf else None,
+        daily_return=_to_float(perf.daily_return) if perf else None,
+    )
+
+
+@router.get("/{fund_id}/nav", response_model=List[NavHistoryItem])
+def get_nav_history(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+    primary_code = (
+        db.query(FundCode)
+        .filter(FundCode.fund_id == fund_id, FundCode.is_primary.is_(True))
+        .first()
+    )
+    if not primary_code:
+        return []
+    rows = (
+        db.query(FundPerformance)
+        .filter(FundPerformance.fund_code_id == primary_code.id)
+        .order_by(FundPerformance.date)
+        .all()
+    )
+    return [NavHistoryItem(date=r.date, nav=float(r.nav)) for r in rows if r.nav is not None]
