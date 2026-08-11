@@ -1,4 +1,5 @@
-from typing import List
+from decimal import Decimal
+from typing import List, Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/funds", tags=["funds"])
 COMPARE_HISTORY_DAYS = 90
 
 
-def _to_float(value):
+def _to_float(value: Optional[Union[int, float, Decimal]]) -> Optional[float]:
     return float(value) if value is not None else None
 
 
@@ -79,7 +80,7 @@ def list_funds(
 
 @router.get("/compare", response_model=FundCompareResponse)
 def compare_funds(
-    ids: List[UUID] = Query(default=[]),
+    ids: List[UUID] = Query(default_factory=list),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -87,6 +88,8 @@ def compare_funds(
         raise HTTPException(status_code=400, detail="At least one fund is required")
     if len(ids) > 5:
         raise HTTPException(status_code=400, detail="Up to 5 funds can be compared")
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="Duplicate fund IDs are not allowed")
 
     rows = _base_fund_query(db).filter(Fund.id.in_(ids)).all()
 
@@ -117,11 +120,11 @@ def compare_funds(
         .filter(FundPerformance.fund_code_id.in_(code_ids))
         .subquery()
     )
-    FundPerformanceAlias = aliased(FundPerformance, ranked)
+    fund_performance_alias = aliased(FundPerformance, ranked)
     history_rows = (
-        db.query(FundPerformanceAlias)
+        db.query(fund_performance_alias)
         .filter(ranked.c.rn <= COMPARE_HISTORY_DAYS)
-        .order_by(FundPerformanceAlias.fund_code_id, FundPerformanceAlias.date)
+        .order_by(fund_performance_alias.fund_code_id, fund_performance_alias.date)
         .all()
     )
 
