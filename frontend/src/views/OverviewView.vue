@@ -9,21 +9,24 @@ const auth = useAuthStore()
 const funds = ref([])
 const keyword = ref('')
 const loading = ref(false)
+const error = ref('')
 
 const selectedIds = ref([])
-const canCompare = computed(() => selectedIds.value.length >= 2)
-const tooManySelected = computed(() => selectedIds.value.length > 5)
+const selectedSet = computed(() => new Set(selectedIds.value))
+const isCompareDisabled = computed(() => selectedIds.value.length < 2)
 
 async function fetchFunds() {
   loading.value = true
+  error.value = ''
   try {
-    const res = await fetch(`/api/funds?q=${encodeURIComponent(keyword.value)}`, {
+    const res = await fetch(`/api/funds?q=${encodeURIComponent(keyword.value.trim())}`, {
       headers: { Authorization: `Bearer ${auth.token}` },
     })
     if (!res.ok) throw new Error('加载失败')
     funds.value = await res.json()
   } catch (e) {
     console.error(e)
+    error.value = '加载基金数据失败'
   } finally {
     loading.value = false
   }
@@ -43,8 +46,14 @@ function toggleFund(id) {
 }
 
 function goCompare() {
-  if (!canCompare.value) return
+  if (isCompareDisabled.value) return
   router.push(`/compare?ids=${selectedIds.value.join(',')}`)
+}
+
+function formatReturn(value) {
+  if (value == null) return '-'
+  const sign = value >= 0 ? '+' : ''
+  return `${sign}${value.toFixed(2)}%`
 }
 
 onMounted(fetchFunds)
@@ -56,7 +65,7 @@ onMounted(fetchFunds)
       <h1 class="font-bold text-lg">基金总览</h1>
       <div class="flex items-center gap-4">
         <span class="text-sm text-body">{{ auth.username }}</span>
-        <button class="text-sm text-body hover:text-ink" @click="logout">退出</button>
+        <button type="button" class="text-sm text-body hover:text-ink" @click="logout">退出</button>
       </div>
     </header>
 
@@ -67,11 +76,12 @@ onMounted(fetchFunds)
           <span v-if="selectedIds.length" class="text-sm text-body">
             已选 {{ selectedIds.length }} 只基金
           </span>
-          <button class="btn-secondary" @click="fetchFunds">搜索</button>
+          <button type="button" class="btn-secondary" @click="fetchFunds">搜索</button>
           <button
+            type="button"
             class="btn-primary"
-            :disabled="!canCompare || tooManySelected"
-            :class="{ 'opacity-50 cursor-not-allowed': !canCompare || tooManySelected }"
+            :disabled="isCompareDisabled"
+            :class="{ 'opacity-50 cursor-not-allowed': isCompareDisabled }"
             @click="goCompare"
           >
             对比
@@ -80,19 +90,25 @@ onMounted(fetchFunds)
       </div>
 
       <div v-if="loading" class="text-center py-20 text-muted">加载中...</div>
+      <div v-else-if="error" class="text-center py-20 text-error">{{ error }}</div>
+      <div v-else-if="funds.length === 0" class="text-center py-20 text-muted">未找到基金</div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="fund in funds"
           :key="fund.id"
           class="card p-5 cursor-pointer hover:shadow-md transition-shadow relative"
+          role="button"
+          tabindex="0"
           @click="router.push(`/detail/${fund.id}`)"
+          @keyup.enter="router.push(`/detail/${fund.id}`)"
         >
           <input
             type="checkbox"
             class="absolute top-4 right-4 w-4 h-4 accent-brand"
-            :checked="selectedIds.includes(fund.id)"
-            @click.stop="toggleFund(fund.id)"
+            :aria-label="`选择 ${fund.name}`"
+            :checked="selectedSet.has(fund.id)"
+            @change.stop="toggleFund(fund.id)"
           />
           <div class="flex items-start justify-between mb-3">
             <div>
@@ -109,7 +125,7 @@ onMounted(fetchFunds)
             <div>
               <p class="text-muted text-xs">日涨幅</p>
               <p :class="fund.daily_return >= 0 ? 'text-up' : 'text-down'" class="font-semibold">
-                {{ fund.daily_return != null ? `${fund.daily_return >= 0 ? '+' : ''}${fund.daily_return.toFixed(2)}%` : '-' }}
+                {{ formatReturn(fund.daily_return) }}
               </p>
             </div>
           </div>
