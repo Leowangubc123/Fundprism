@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -41,9 +42,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-    except JWTError:
+        user_uuid = UUID(user_id)
+    except (JWTError, ValueError):
         raise credentials_exception
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_uuid).first()
     if user is None or not user.is_active:
         raise credentials_exception
     return user

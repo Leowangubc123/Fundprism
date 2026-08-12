@@ -80,21 +80,32 @@ def list_funds(
 
 @router.get("/compare", response_model=FundCompareResponse)
 def compare_funds(
-    ids: List[UUID] = Query(default_factory=list),
+    ids: str = Query(default=""),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not ids:
+    parsed_ids = []
+    if ids:
+        for id_str in ids.split(","):
+            id_str = id_str.strip()
+            if not id_str:
+                continue
+            try:
+                parsed_ids.append(UUID(id_str))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid fund ID")
+
+    if not parsed_ids:
         raise HTTPException(status_code=400, detail="At least one fund is required")
-    if len(ids) > 5:
+    if len(parsed_ids) > 5:
         raise HTTPException(status_code=400, detail="Up to 5 funds can be compared")
-    if len(ids) != len(set(ids)):
+    if len(parsed_ids) != len(set(parsed_ids)):
         raise HTTPException(status_code=400, detail="Duplicate fund IDs are not allowed")
 
-    rows = _base_fund_query(db).filter(Fund.id.in_(ids)).all()
+    rows = _base_fund_query(db).filter(Fund.id.in_(parsed_ids)).all()
 
     found_ids = {fund.id for fund, _, _ in rows}
-    missing_ids = set(ids) - found_ids
+    missing_ids = set(parsed_ids) - found_ids
     if missing_ids:
         raise HTTPException(status_code=404, detail="One or more funds not found")
 
@@ -133,7 +144,7 @@ def compare_funds(
         history_by_code.setdefault(row.fund_code_id, []).append(row)
 
     result = []
-    for fund_id in ids:
+    for fund_id in parsed_ids:
         fund = fund_by_id[fund_id]
         code = code_by_id[fund_id]
         perf = perf_by_id[fund_id]

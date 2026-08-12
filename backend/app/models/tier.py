@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Date
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, ForeignKey, Date, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -37,7 +37,7 @@ class FundTierHistory(Base):
     new_tier = Column(String(16), nullable=False)
     reason = Column(String(1000), nullable=False)
     ip_address = Column(String(64), nullable=True)
-    metrics_snapshot = Column(JSONB, nullable=True)
+    metrics_snapshot = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
