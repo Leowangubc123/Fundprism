@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { fetchApi } from '../api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -19,9 +20,7 @@ async function fetchFunds() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/funds?q=${encodeURIComponent(keyword.value.trim())}`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-    })
+    const res = await fetchApi(`/api/funds?q=${encodeURIComponent(keyword.value.trim())}`)
     if (!res.ok) throw new Error('加载失败')
     funds.value = await res.json()
   } catch (e) {

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { fetchApi } from '../api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -15,7 +16,7 @@ async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetchApi('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: username.value, password: password.value }),

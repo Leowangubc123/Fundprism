@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
 import { Line } from 'vue-chartjs'
+import { fetchApi } from '../api'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
@@ -43,8 +44,8 @@ async function fetchDetail() {
   error.value = ''
   try {
     const [fundRes, navRes] = await Promise.all([
-      fetch(`/api/funds/${route.params.id}`, { headers: { Authorization: `Bearer ${auth.token}` } }),
-      fetch(`/api/funds/${route.params.id}/nav`, { headers: { Authorization: `Bearer ${auth.token}` } }),
+      fetchApi(`/api/funds/${route.params.id}`),
+      fetchApi(`/api/funds/${route.params.id}/nav`),
     ])
     if (!fundRes.ok || !navRes.ok) throw new Error('加载失败')
     fund.value = await fundRes.json()

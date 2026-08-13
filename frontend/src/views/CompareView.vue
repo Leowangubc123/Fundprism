@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import CompareMetrics from '../components/CompareMetrics.vue'
 import CompareChart from '../components/CompareChart.vue'
+import { fetchApi } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,9 +28,7 @@ async function fetchCompareData() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/funds/compare?ids=${selectedIds.value.join(',')}`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-    })
+    const res = await fetchApi(`/api/funds/compare?ids=${selectedIds.value.join(',')}`)
     if (!res.ok) throw new Error('加载失败')
     const data = await res.json()
     funds.value = data.funds || []
