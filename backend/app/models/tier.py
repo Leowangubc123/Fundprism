@@ -1,16 +1,14 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Date
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, Date, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 
-# Use JSONB on PostgreSQL, fall back to JSON on SQLite for tests
-MetricsJSON = JSONB().with_variant(JSON(), "sqlite")
+# Use JSON for portability across PostgreSQL and SQLite.
+MetricsJSON = JSON()
 
 
 class FundCurrentTier(Base):
