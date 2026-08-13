@@ -74,19 +74,18 @@ TUSHARE_TOKEN=
 Run the server:
 
 ```bash
+cd backend
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
 The API will be available at `http://localhost:8000`.
 
-On first startup, the app creates all SQLAlchemy tables and seeds two default users:
+数据库迁移使用 Alembic 管理。首次启动前请运行 `alembic upgrade head` 创建表结构。
 
-| Username | Password | Role  |
-|----------|----------|-------|
-| `admin`  | `admin`  | admin |
-| `sales`  | `sales`  | sales |
+如需自动创建初始管理员，可设置环境变量 `INITIAL_ADMIN_USERNAME` 与 `INITIAL_ADMIN_PASSWORD`，应用启动时会自动创建该账号。留空则不创建任何默认用户。
 
-> **Note:** Change these credentials before deploying to production.
+> **Note:** Do not use weak credentials in production. Set a strong `SECRET_KEY` and use a unique initial admin password.
 
 ### 3. Frontend Setup
 
@@ -115,6 +114,7 @@ npm run build
 | GET    | `/api/funds` | List/search funds |
 | GET    | `/api/funds/{id}` | Fund detail |
 | GET    | `/api/funds/{id}/nav` | NAV history |
+| GET    | `/api/funds/compare?ids=...` | Compare selected funds |
 
 ---
 
@@ -141,12 +141,62 @@ npm run build
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `120` | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `TUSHARE_TOKEN` | `""` | Tushare API token for data sync |
-| `CORS_ORIGINS` | `http://localhost:5173, http://localhost:3000` | Allowed frontend origins |
+| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed frontend origins |
+| `INITIAL_ADMIN_USERNAME` | `""` | Optional initial admin username |
+| `INITIAL_ADMIN_PASSWORD` | `""` | Optional initial admin password |
+
+### Frontend
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | `""` | API base URL (e.g. `https://api.example.com`). Leave blank in local dev to use Vite proxy. |
+
+---
+
+## Railway Deployment
+
+This project is configured for **separate backend + frontend static site** deployment on Railway.
+
+### 1. Create Project and Services
+
+1. Create a new Railway project.
+2. Add a **PostgreSQL** service. Railway will create `DATABASE_URL` automatically.
+3. Add a **backend service** from the same GitHub repo:
+   - Root Directory: `/backend`
+   - Config Path: `/backend/railway.toml`
+4. Add a **frontend static site** service from the same GitHub repo:
+   - Root Directory: `/frontend`
+   - Build Command: `npm ci && npm run build`
+   - Publish Directory: `dist`
+
+### 2. Environment Variables
+
+**Backend service:**
+
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | (auto-populated by Railway PostgreSQL) |
+| `SECRET_KEY` | Generate a strong random string |
+| `CORS_ORIGINS` | `https://<your-frontend-domain>.up.railway.app` |
+| `INITIAL_ADMIN_USERNAME` | Your desired admin username |
+| `INITIAL_ADMIN_PASSWORD` | Strong unique password |
+
+**Frontend service:**
+
+| Variable | Value |
+|----------|-------|
+| `VITE_API_BASE_URL` | `https://<your-backend-domain>.up.railway.app` |
+
+### 3. Deploy
+
+Push to `main`. Railway will build and deploy both services. The backend start command runs `alembic upgrade head` before starting Uvicorn, so database tables are created automatically on first deploy.
+
+After deploy, verify the backend health check at `https://<backend-domain>/health`.
 
 ---
 
 ## Notes
 
-- Tables are auto-created on startup via `Base.metadata.create_all()` for local development. Alembic migrations will be added in a future iteration.
-- The compare and admin views are currently placeholders.
+- Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
+- The admin view is currently a placeholder.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.
