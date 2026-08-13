@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
@@ -41,7 +41,7 @@ function toggleFund(id) {
   if (selectedIds.value.includes(id)) {
     selectedIds.value = selectedIds.value.filter((x) => x !== id)
   } else if (selectedIds.value.length < 5) {
-    selectedIds.value.push(id)
+    selectedIds.value = [...selectedIds.value, id]
   }
 }
 
@@ -71,10 +71,13 @@ onMounted(fetchFunds)
 
     <main class="max-w-6xl mx-auto p-6">
       <div class="flex items-center justify-between mb-6">
-        <input v-model="keyword" type="text" class="search-pill w-72" placeholder="搜索基金名称/代码" @keyup.enter="fetchFunds" />
+        <input v-model="keyword" type="text" class="search-pill w-72" placeholder="搜索基金名称/代码" aria-label="搜索基金名称或代码" @keyup.enter="fetchFunds" />
         <div class="flex items-center gap-3">
           <span v-if="selectedIds.length" class="text-sm text-body">
             已选 {{ selectedIds.length }} 只基金
+          </span>
+          <span v-if="selectedIds.length" class="text-sm text-muted">
+            最多选择 5 只基金
           </span>
           <button type="button" class="btn-secondary" @click="fetchFunds">搜索</button>
           <button
@@ -97,39 +100,36 @@ onMounted(fetchFunds)
         <div
           v-for="fund in funds"
           :key="fund.id"
-          class="card p-5 cursor-pointer hover:shadow-md transition-shadow relative"
-          role="button"
-          tabindex="0"
-          @click="router.push(`/detail/${fund.id}`)"
-          @keyup.enter="router.push(`/detail/${fund.id}`)"
+          class="card p-5 hover:shadow-md transition-shadow relative"
         >
+          <RouterLink :to="`/detail/${fund.id}`" class="block h-full">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <h3 class="font-semibold text-ink">{{ fund.name }}</h3>
+                <p class="text-xs text-muted mt-1">{{ fund.code }}</p>
+              </div>
+              <span class="text-xs px-2 py-1 rounded-full bg-surface-strong text-body">{{ fund.category }}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p class="text-muted text-xs">净值</p>
+                <p class="font-semibold">{{ fund.nav?.toFixed(4) ?? '-' }}</p>
+              </div>
+              <div>
+                <p class="text-muted text-xs">日涨幅</p>
+                <p :class="fund.daily_return >= 0 ? 'text-up' : 'text-down'" class="font-semibold">
+                  {{ formatReturn(fund.daily_return) }}
+                </p>
+              </div>
+            </div>
+          </RouterLink>
           <input
             type="checkbox"
-            class="absolute top-4 right-4 w-4 h-4 accent-brand"
+            class="absolute top-4 right-4 w-4 h-4 accent-brand z-10"
             :aria-label="`选择 ${fund.name}`"
             :checked="selectedSet.has(fund.id)"
-            @click.stop
             @change.stop="toggleFund(fund.id)"
           />
-          <div class="flex items-start justify-between mb-3">
-            <div>
-              <h3 class="font-semibold text-ink">{{ fund.name }}</h3>
-              <p class="text-xs text-muted mt-1">{{ fund.code }}</p>
-            </div>
-            <span class="text-xs px-2 py-1 rounded-full bg-surface-strong text-body">{{ fund.category }}</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p class="text-muted text-xs">净值</p>
-              <p class="font-semibold">{{ fund.nav?.toFixed(4) ?? '-' }}</p>
-            </div>
-            <div>
-              <p class="text-muted text-xs">日涨幅</p>
-              <p :class="fund.daily_return >= 0 ? 'text-up' : 'text-down'" class="font-semibold">
-                {{ formatReturn(fund.daily_return) }}
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </main>
