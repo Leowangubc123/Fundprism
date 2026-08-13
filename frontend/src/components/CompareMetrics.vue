@@ -5,49 +5,51 @@ defineProps({
 
 function formatReturn(value) {
   if (value == null) return '-'
-  const sign = value >= 0 ? '+' : ''
-  return `${sign}${value.toFixed(2)}%`
+  const num = Number(value)
+  if (Number.isNaN(num)) return '-'
+  const sign = num >= 0 ? '+' : ''
+  return `${sign}${num.toFixed(2)}%`
 }
+
+function formatNav(value) {
+  if (value == null) return '-'
+  const num = Number(value)
+  return Number.isNaN(num) ? '-' : num.toFixed(4)
+}
+
+const metrics = [
+  { key: 'code', label: '基金代码', format: (v) => v ?? '-' },
+  { key: 'category', label: '类别', format: (v) => v ?? '-' },
+  { key: 'nav', label: '最新净值', format: formatNav },
+  { key: 'daily_return', label: '日涨幅', format: formatReturn, isReturn: true },
+  { key: 'manager', label: '基金经理', format: (v) => v ?? '-' },
+]
 </script>
 
 <template>
-  <div class="overflow-x-auto">
+  <div v-if="funds.length" class="overflow-x-auto">
     <table class="w-full text-sm text-left">
       <thead class="text-muted border-b border-hairline">
         <tr>
-          <th class="py-3 pr-4 font-medium">指标</th>
-          <th v-for="fund in funds" :key="fund.id" class="py-3 px-4 font-medium min-w-[140px]">
+          <th scope="col" class="py-3 pr-4 font-medium">指标</th>
+          <th v-for="fund in funds" :key="fund.id" scope="col" class="py-3 px-4 font-medium min-w-[140px]">
             {{ fund.name }}
           </th>
         </tr>
       </thead>
       <tbody>
-        <tr class="border-b border-hairline-soft">
-          <td class="py-3 pr-4 text-muted">基金代码</td>
-          <td v-for="fund in funds" :key="fund.id" class="py-3 px-4">{{ fund.code }}</td>
-        </tr>
-        <tr class="border-b border-hairline-soft">
-          <td class="py-3 pr-4 text-muted">类别</td>
-          <td v-for="fund in funds" :key="fund.id" class="py-3 px-4">{{ fund.category }}</td>
-        </tr>
-        <tr class="border-b border-hairline-soft">
-          <td class="py-3 pr-4 text-muted">最新净值</td>
-          <td v-for="fund in funds" :key="fund.id" class="py-3 px-4 font-semibold">{{ fund.nav?.toFixed(4) ?? '-' }}</td>
-        </tr>
-        <tr class="border-b border-hairline-soft">
-          <td class="py-3 pr-4 text-muted">日涨幅</td>
+        <tr v-for="metric in metrics" :key="metric.key" class="border-b border-hairline-soft">
+          <th scope="row" class="py-3 pr-4 text-muted font-normal">{{ metric.label }}</th>
           <td v-for="fund in funds" :key="fund.id" class="py-3 px-4">
-            <span v-if="fund.daily_return != null" :class="fund.daily_return >= 0 ? 'text-up' : 'text-down'">
-              {{ formatReturn(fund.daily_return) }}
+            <span v-if="metric.isReturn" :class="fund[metric.key] >= 0 ? 'text-up' : 'text-down'">
+              {{ metric.format(fund[metric.key]) }}
             </span>
-            <span v-else class="text-muted">-</span>
+            <span v-else-if="metric.key === 'nav'" class="font-semibold">{{ metric.format(fund[metric.key]) }}</span>
+            <span v-else>{{ metric.format(fund[metric.key]) }}</span>
           </td>
-        </tr>
-        <tr>
-          <td class="py-3 pr-4 text-muted">基金经理</td>
-          <td v-for="fund in funds" :key="fund.id" class="py-3 px-4">{{ fund.manager ?? '-' }}</td>
         </tr>
       </tbody>
     </table>
   </div>
+  <p v-else class="text-center text-muted py-8">请选择基金进行对比</p>
 </template>
