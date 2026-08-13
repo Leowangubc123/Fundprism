@@ -108,6 +108,7 @@ onMounted(fetchFunds)
             class="absolute top-4 right-4 w-4 h-4 accent-brand"
             :aria-label="`选择 ${fund.name}`"
             :checked="selectedSet.has(fund.id)"
+            @click.stop
             @change.stop="toggleFund(fund.id)"
           />
           <div class="flex items-start justify-between mb-3">
