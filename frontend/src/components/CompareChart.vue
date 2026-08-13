@@ -47,7 +47,7 @@ const chartOptions = {
 </script>
 
 <template>
-  <div class="h-[360px]">
+  <div class="h-[360px]" role="img" aria-label="选中基金的净值走势对比图">
     <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>
