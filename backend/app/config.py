@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -9,7 +8,9 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     TUSHARE_TOKEN: str = ""
     ALGORITHM: str = "HS256"
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: str = "http://localhost:5173"
+    INITIAL_ADMIN_USERNAME: str = ""
+    INITIAL_ADMIN_PASSWORD: str = ""
 
     class Config:
         env_file = ".env"
