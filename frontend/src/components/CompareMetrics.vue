@@ -20,7 +20,7 @@ function formatNav(value) {
 const metrics = [
   { key: 'code', label: '基金代码', format: (v) => v ?? '-' },
   { key: 'category', label: '类别', format: (v) => v ?? '-' },
-  { key: 'nav', label: '最新净值', format: formatNav },
+  { key: 'nav', label: '最新净值', format: formatNav, isNav: true },
   { key: 'daily_return', label: '日涨幅', format: formatReturn, isReturn: true },
   { key: 'manager', label: '基金经理', format: (v) => v ?? '-' },
 ]
@@ -41,10 +41,10 @@ const metrics = [
         <tr v-for="metric in metrics" :key="metric.key" class="border-b border-hairline-soft">
           <th scope="row" class="py-3 pr-4 text-muted font-normal">{{ metric.label }}</th>
           <td v-for="fund in funds" :key="fund.id" class="py-3 px-4">
-            <span v-if="metric.isReturn" :class="fund[metric.key] >= 0 ? 'text-up' : 'text-down'">
+            <span v-if="metric.isReturn" :class="fund[metric.key] == null ? 'text-muted' : fund[metric.key] >= 0 ? 'text-up' : 'text-down'">
               {{ metric.format(fund[metric.key]) }}
             </span>
-            <span v-else-if="metric.key === 'nav'" class="font-semibold">{{ metric.format(fund[metric.key]) }}</span>
+            <span v-else-if="metric.isNav" class="font-semibold">{{ metric.format(fund[metric.key]) }}</span>
             <span v-else>{{ metric.format(fund[metric.key]) }}</span>
           </td>
         </tr>
