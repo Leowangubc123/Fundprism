@@ -63,6 +63,13 @@ onMounted(fetchFunds)
     <header class="bg-canvas border-b border-hairline px-6 h-16 flex items-center justify-between sticky top-0 z-10">
       <h1 class="font-bold text-lg">基金总览</h1>
       <div class="flex items-center gap-4">
+        <RouterLink
+          v-if="auth.isAdmin"
+          to="/admin/funds"
+          class="text-sm text-body hover:text-ink"
+        >
+          后台管理
+        </RouterLink>
         <span class="text-sm text-body">{{ auth.username }}</span>
         <button type="button" class="text-sm text-body hover:text-ink" @click="logout">退出</button>
       </div>

@@ -43,6 +43,7 @@ function logout() {
       </nav>
 
       <div class="p-4 border-t border-white/10">
+        <RouterLink to="/overview" class="block text-sm text-on-dark-soft hover:text-white mb-3">← 返回前台</RouterLink>
         <div class="text-sm text-on-dark-soft mb-3">{{ auth.username }}</div>
         <button
           type="button"
