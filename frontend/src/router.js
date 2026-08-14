@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import AdminLayout from './views/admin/AdminLayout.vue'
 import LoginView from './views/LoginView.vue'
 import OverviewView from './views/OverviewView.vue'
 
@@ -11,7 +12,15 @@ const router = createRouter({
     { path: '/overview', name: 'overview', component: OverviewView, meta: { requiresAuth: true } },
     { path: '/compare', name: 'compare', component: () => import('./views/CompareView.vue'), meta: { requiresAuth: true } },
     { path: '/detail/:id', name: 'detail', component: () => import('./views/DetailView.vue'), meta: { requiresAuth: true } },
-    { path: '/admin', name: 'admin', component: () => import('./views/admin/AdminLayout.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
+    {
+      path: '/admin',
+      component: AdminLayout,
+      meta: { requiresAuth: true, requiresAdmin: true },
+      children: [
+        { path: '', redirect: '/admin/funds' },
+        { path: 'funds', component: () => import('./views/admin/FundManagementView.vue') },
+      ],
+    },
   ],
 })
 
