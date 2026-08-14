@@ -122,6 +122,7 @@ All admin endpoints require a user with `role=admin`.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET    | `/api/admin/funds/lookup?code=...&market=...` | Lookup fund basic info from Tushare |
 | GET    | `/api/admin/funds` | List all funds in product pool |
 | POST   | `/api/admin/funds` | Create a new fund |
 | GET    | `/api/admin/funds/{id}` | Fund detail (admin) |
@@ -214,6 +215,6 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 ## Notes
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
-- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, and trigger per-fund NAV sync from Tushare.
+- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, and trigger per-fund NAV sync.
 - Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.
