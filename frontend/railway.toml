@@ -3,5 +3,4 @@ builder = "NIXPACKS"
 buildCommand = "npm ci && npm run build"
 
 [deploy]
-# Railway Static Site 会自动识别 dist/ 目录
-startCommand = ""
+startCommand = "npx serve -s dist -l ${PORT}"
