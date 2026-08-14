@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import get_db
 from app.models import User
-from app.routers import auth, funds
+from app.routers import admin, auth, funds
 from app.security import get_password_hash
 
 
@@ -42,6 +42,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(funds.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 
 @app.get("/health")
