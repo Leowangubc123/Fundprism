@@ -116,6 +116,19 @@ npm run build
 | GET    | `/api/funds/{id}/nav` | NAV history |
 | GET    | `/api/funds/compare?ids=...` | Compare selected funds |
 
+### Admin Endpoints
+
+All admin endpoints require a user with `role=admin`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET    | `/api/admin/funds` | List all funds in product pool |
+| POST   | `/api/admin/funds` | Create a new fund |
+| GET    | `/api/admin/funds/{id}` | Fund detail (admin) |
+| PUT    | `/api/admin/funds/{id}` | Update fund info |
+| DELETE | `/api/admin/funds/{id}` | Delete fund and related data |
+| POST   | `/api/admin/funds/{id}/sync` | Sync NAV history from Tushare |
+
 ---
 
 ## Frontend Routes
@@ -126,7 +139,8 @@ npm run build
 | `/overview` | OverviewView | authenticated |
 | `/detail/:id` | DetailView | authenticated |
 | `/compare` | CompareView | authenticated |
-| `/admin` | AdminLayout | admin only |
+| `/admin` | AdminLayout → redirect to `/admin/funds` | admin only |
+| `/admin/funds` | FundManagementView | admin only |
 
 ---
 
@@ -155,7 +169,7 @@ npm run build
 
 ## Railway Deployment
 
-This project is configured for **separate backend + frontend static site** deployment on Railway.
+This project is configured for **separate backend + frontend deployment** on Railway.
 
 ### 1. Create Project and Services
 
@@ -164,10 +178,11 @@ This project is configured for **separate backend + frontend static site** deplo
 3. Add a **backend service** from the same GitHub repo:
    - Root Directory: `/backend`
    - Config Path: `/backend/railway.toml`
-4. Add a **frontend static site** service from the same GitHub repo:
+4. Add a **frontend empty service** from the same GitHub repo:
    - Root Directory: `/frontend`
-   - Build Command: `npm ci && npm run build`
-   - Publish Directory: `dist`
+   - Config Path: `/frontend/railway.toml`
+
+The frontend service uses `serve` to serve the static build output, so Railway's install phase runs `npm ci` and the build command runs `npm run build`.
 
 ### 2. Environment Variables
 
@@ -180,6 +195,7 @@ This project is configured for **separate backend + frontend static site** deplo
 | `CORS_ORIGINS` | `https://<your-frontend-domain>.up.railway.app` |
 | `INITIAL_ADMIN_USERNAME` | Your desired admin username |
 | `INITIAL_ADMIN_PASSWORD` | Strong unique password |
+| `TUSHARE_TOKEN` | (optional) Tushare Pro API token for NAV sync |
 
 **Frontend service:**
 
@@ -198,5 +214,6 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 ## Notes
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
-- The admin view is currently a placeholder.
+- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, and trigger per-fund NAV sync from Tushare.
+- Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.
