@@ -57,6 +57,21 @@ def auth_headers(auth_user):
 
 
 @pytest.fixture(scope="function")
+def admin_user(db):
+    user = User(username="admin", hashed_password=get_password_hash("pass"), role="admin")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def admin_headers(admin_user):
+    token = create_access_token({"sub": str(admin_user.id)})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
 def sample_funds(db):
     fund_a = Fund(name="基金 A", category="混合型", risk_level="中", manager="张三")
     fund_b = Fund(name="基金 B", category="股票型", risk_level="高", manager="李四")
