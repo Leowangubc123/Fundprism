@@ -131,3 +131,34 @@ def test_sync_fund_requires_token(client, admin_headers, db):
 
     response = client.post(f"/api/admin/funds/{fund.id}/sync", headers=admin_headers)
     assert response.status_code == 400
+
+
+def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
+    monkeypatch.setattr("app.services.tushare_sync.settings.TUSHARE_TOKEN", "test-token")
+
+    mock_df = pd.DataFrame({
+        "ts_code": ["000006.OF"],
+        "name": ["测试基金"],
+        "management": ["测试经理"],
+        "fund_type": ["混合型"],
+        "found_date": ["20200101"],
+        "market": ["OF"],
+    })
+
+    mock_pro = Mock()
+    mock_pro.fund_basic.return_value = mock_df
+
+    with patch("app.services.tushare_sync.ts.pro_api", return_value=mock_pro):
+        response = client.get("/api/admin/funds/lookup?code=000006&market=OF", headers=admin_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "测试基金"
+    assert data["manager"] == "测试经理"
+    assert data["category"] == "混合型"
+    assert data["market"] == "OF"
+
+
+def test_lookup_fund_requires_admin(client, auth_headers):
+    response = client.get("/api/admin/funds/lookup?code=000006&market=OF", headers=auth_headers)
+    assert response.status_code == 403

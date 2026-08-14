@@ -126,6 +126,31 @@ async function submitForm() {
   }
 }
 
+async function lookupFund() {
+  error.value = ''
+  message.value = ''
+
+  if (!/^\d{6}$/.test(form.code)) {
+    error.value = '请先输入 6 位基金代码'
+    return
+  }
+
+  try {
+    const res = await fetchApi(`/api/admin/funds/lookup?code=${form.code}&market=${form.market}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || '查询失败')
+
+    if (data.name) form.name = data.name
+    if (data.manager) form.manager = data.manager
+    if (data.category) form.category = data.category
+    if (data.establish_date) form.establish_date = data.establish_date
+
+    message.value = `已获取：${data.name}`
+  } catch (e) {
+    error.value = e.message || '从 Tushare 获取失败'
+  }
+}
+
 async function fetchFunds() {
   loading.value = true
   error.value = ''
@@ -271,6 +296,12 @@ const sortedFunds = computed(() => {
                 <option v-for="opt in marketOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
               </select>
             </div>
+          </div>
+
+          <div v-if="!isEditing" class="flex justify-end">
+            <button type="button" class="text-sm text-brand hover:underline" @click="lookupFund">
+              从 Tushare 获取基本信息
+            </button>
           </div>
 
           <div class="grid grid-cols-2 gap-4">

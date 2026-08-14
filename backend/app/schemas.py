@@ -69,6 +69,15 @@ class SyncResponse(BaseModel):
     message: Optional[str] = None
 
 
+class FundBasicLookupResponse(BaseModel):
+    ts_code: str
+    name: str
+    manager: Optional[str]
+    category: Optional[str]
+    establish_date: Optional[date]
+    market: str
+
+
 class FundListItem(BaseModel):
     id: UUID
     name: str

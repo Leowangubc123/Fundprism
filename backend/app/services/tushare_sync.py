@@ -13,6 +13,13 @@ from app.models.performance import FundPerformance
 from app.models.sync import SyncLog
 
 
+def _str(value) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
 def _today_str() -> str:
     return datetime.utcnow().strftime("%Y%m%d")
 
@@ -178,4 +185,29 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
         "status": "success",
         "records_count": total,
         "message": f"Created {records_created}, updated {records_updated} NAV records",
+    }
+
+
+def lookup_fund_basic(code: str, market: str) -> dict:
+    if not settings.TUSHARE_TOKEN:
+        raise HTTPException(status_code=400, detail="TUSHARE_TOKEN not configured")
+
+    ts_code = f"{code}.{market}"
+    try:
+        pro = ts.pro_api(settings.TUSHARE_TOKEN)
+        df = pro.fund_basic(ts_code=ts_code)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Tushare request failed: {exc}")
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="Fund not found in Tushare")
+
+    row = df.iloc[0]
+    return {
+        "ts_code": _str(row.get("ts_code")),
+        "name": _str(row.get("name")),
+        "management": _str(row.get("management")),
+        "fund_type": _str(row.get("fund_type")),
+        "found_date": _parse_date(row.get("found_date")),
+        "market": _str(row.get("market")),
     }

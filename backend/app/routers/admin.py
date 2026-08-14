@@ -1,4 +1,5 @@
 from typing import List, Optional
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,14 +13,19 @@ from app.models.tier import FundCurrentTier
 from app.models.user import User
 from app.schemas import (
     AdminFundListItem,
+    FundBasicLookupResponse,
     FundCreateRequest,
     FundUpdateRequest,
+    Market,
     SyncResponse,
 )
 from app.security import get_current_admin
-from app.services.tushare_sync import sync_fund_nav
+from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+_CODE_RE = re.compile(r"^\d{6}$")
 
 
 def _to_float(value) -> Optional[float]:
@@ -113,6 +119,26 @@ def create_fund(
     db.refresh(code)
 
     return _build_admin_item(fund, code, None, None)
+
+
+@router.get("/funds/lookup", response_model=FundBasicLookupResponse)
+def lookup_fund(
+    code: str,
+    market: Market,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    if not _CODE_RE.match(code):
+        raise HTTPException(status_code=400, detail="Invalid fund code")
+    result = lookup_fund_basic(code, market.value)
+    return FundBasicLookupResponse(
+        ts_code=result.get("ts_code") or f"{code}.{market.value}",
+        name=result.get("name") or "",
+        manager=result.get("management"),
+        category=result.get("fund_type"),
+        establish_date=result.get("found_date"),
+        market=market.value,
+    )
 
 
 @router.get("/funds/{fund_id}", response_model=AdminFundListItem)
