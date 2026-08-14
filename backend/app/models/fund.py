@@ -38,6 +38,7 @@ class FundCode(Base):
     fund_id = Column(UUID(as_uuid=True), ForeignKey("funds.id"), nullable=False, index=True)
     code = Column(String(16), nullable=False, unique=True, index=True)
     code_type = Column(String(8), default="A", nullable=False)
+    market = Column(String(8), default="OF", nullable=False)
     is_primary = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
