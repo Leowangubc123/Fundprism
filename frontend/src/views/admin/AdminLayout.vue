@@ -8,6 +8,7 @@ const auth = useAuthStore()
 
 const navItems = [
   { path: '/admin/funds', label: '基金管理' },
+  { path: '/admin/tags', label: '标签管理' },
 ]
 
 function isActive(path) {

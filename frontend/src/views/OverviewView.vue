@@ -8,7 +8,9 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const funds = ref([])
+const tags = ref([])
 const keyword = ref('')
+const selectedTag = ref('')
 const loading = ref(false)
 const error = ref('')
 
@@ -20,7 +22,11 @@ async function fetchFunds() {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetchApi(`/api/funds?q=${encodeURIComponent(keyword.value.trim())}`)
+    let url = `/api/funds?q=${encodeURIComponent(keyword.value.trim())}`
+    if (selectedTag.value) {
+      url += `&tag=${encodeURIComponent(selectedTag.value)}`
+    }
+    const res = await fetchApi(url)
     if (!res.ok) throw new Error('加载失败')
     funds.value = await res.json()
   } catch (e) {
@@ -28,6 +34,16 @@ async function fetchFunds() {
     error.value = '加载基金数据失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchTags() {
+  try {
+    const res = await fetchApi('/api/admin/tags')
+    if (!res.ok) throw new Error('加载标签失败')
+    tags.value = await res.json()
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -55,7 +71,19 @@ function formatReturn(value) {
   return `${sign}${value.toFixed(2)}%`
 }
 
-onMounted(fetchFunds)
+const groupedTags = computed(() => {
+  const groups = {}
+  for (const tag of tags.value) {
+    if (!groups[tag.category]) groups[tag.category] = []
+    groups[tag.category].push(tag)
+  }
+  return groups
+})
+
+onMounted(() => {
+  fetchFunds()
+  fetchTags()
+})
 </script>
 
 <template>
@@ -77,7 +105,15 @@ onMounted(fetchFunds)
 
     <main class="max-w-6xl mx-auto p-6">
       <div class="flex items-center justify-between mb-6">
-        <input v-model="keyword" type="text" class="search-pill w-72" placeholder="搜索基金名称/代码" aria-label="搜索基金名称或代码" @keyup.enter="fetchFunds" />
+        <div class="flex items-center gap-3">
+          <input v-model="keyword" type="text" class="search-pill w-72" placeholder="搜索基金名称/代码" aria-label="搜索基金名称或代码" @keyup.enter="fetchFunds" />
+          <select v-model="selectedTag" class="input w-48" @change="fetchFunds">
+            <option value="">全部标签</option>
+            <optgroup v-for="(group, category) in groupedTags" :key="category" :label="category">
+              <option v-for="tag in group" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
+            </optgroup>
+          </select>
+        </div>
         <div class="flex items-center gap-3">
           <span v-if="selectedIds.length" class="text-sm text-body">
             已选 {{ selectedIds.length }} 只基金
@@ -116,7 +152,7 @@ onMounted(fetchFunds)
               </div>
               <span class="text-xs px-2 py-1 rounded-full bg-surface-strong text-body">{{ fund.category }}</span>
             </div>
-            <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="grid grid-cols-2 gap-3 text-sm mb-3">
               <div>
                 <p class="text-muted text-xs">净值</p>
                 <p class="font-semibold">{{ fund.nav?.toFixed(4) ?? '-' }}</p>
@@ -127,6 +163,15 @@ onMounted(fetchFunds)
                   {{ formatReturn(fund.daily_return) }}
                 </p>
               </div>
+            </div>
+            <div v-if="fund.tags?.length" class="flex flex-wrap gap-1.5">
+              <span
+                v-for="tag in fund.tags"
+                :key="tag.id"
+                class="text-xs px-2 py-0.5 rounded-full bg-surface-soft text-body border border-hairline"
+              >
+                {{ tag.name }}
+              </span>
             </div>
           </RouterLink>
           <input

@@ -19,6 +19,7 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/admin/funds' },
         { path: 'funds', component: () => import('./views/admin/FundManagementView.vue') },
+        { path: 'tags', component: () => import('./views/admin/TagManagementView.vue') },
       ],
     },
   ],

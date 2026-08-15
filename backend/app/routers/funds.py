@@ -9,8 +9,16 @@ from sqlalchemy.orm import Session, aliased, joinedload
 from app.database import get_db
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
+from app.models.tag import FundTag, Tag
 from app.models.user import User
-from app.schemas import FundCompareItem, FundCompareResponse, FundDetail, FundListItem, NavHistoryItem
+from app.schemas import (
+    FundCompareItem,
+    FundCompareResponse,
+    FundDetail,
+    FundListItem,
+    NavHistoryItem,
+    TagSummary,
+)
 from app.security import get_current_user
 
 router = APIRouter(prefix="/funds", tags=["funds"])
@@ -20,6 +28,17 @@ COMPARE_HISTORY_DAYS = 90
 
 def _to_float(value: Optional[Union[int, float, Decimal]]) -> Optional[float]:
     return float(value) if value is not None else None
+
+
+def _tag_summaries(db: Session, fund_id: UUID) -> List[TagSummary]:
+    tags = (
+        db.query(Tag)
+        .join(FundTag, FundTag.tag_id == Tag.id)
+        .filter(FundTag.fund_id == fund_id, Tag.is_active.is_(True))
+        .order_by(Tag.category, Tag.sort_order, Tag.name)
+        .all()
+    )
+    return [TagSummary(id=t.id, name=t.name, category=t.category) for t in tags]
 
 
 def _latest_performance_subquery(db: Session):
@@ -54,6 +73,7 @@ def _base_fund_query(db: Session):
 @router.get("", response_model=List[FundListItem])
 def list_funds(
     q: str = "",
+    tag: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -62,6 +82,18 @@ def list_funds(
         query = query.filter(
             (Fund.name.ilike(f"%{q}%")) | (FundCode.code.ilike(f"%{q}%"))
         )
+    if tag:
+        # tag can be a tag id or tag name; filter funds that have this active tag.
+        tag_obj = db.query(Tag).filter(Tag.is_active.is_(True)).filter(
+            (Tag.id == tag) | (Tag.name == tag)
+        ).first()
+        if tag_obj:
+            fund_ids = (
+                db.query(FundTag.fund_id)
+                .filter(FundTag.tag_id == tag_obj.id)
+                .subquery()
+            )
+            query = query.filter(Fund.id.in_(fund_ids))
     results = query.order_by(Fund.name).all()
     out = []
     for fund, code, perf in results:
@@ -73,6 +105,7 @@ def list_funds(
                 category=fund.category,
                 nav=_to_float(perf.nav) if perf else None,
                 daily_return=_to_float(perf.daily_return) if perf else None,
+                tags=_tag_summaries(db, fund.id),
             )
         )
     return out
@@ -163,6 +196,7 @@ def compare_funds(
                 daily_return=_to_float(perf.daily_return) if perf else None,
                 manager=fund.manager,
                 nav_history=nav_history,
+                tags=_tag_summaries(db, fund.id),
             )
         )
 
@@ -186,6 +220,7 @@ def get_fund(
         category=fund.category,
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
+        tags=_tag_summaries(db, fund.id),
     )
 
 

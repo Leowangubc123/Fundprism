@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { fetchApi } from '../../api'
 
 const funds = ref([])
+const tags = ref([])
 const loading = ref(false)
 const message = ref('')
 const error = ref('')
@@ -29,6 +30,7 @@ const emptyForm = {
   establish_date: '',
   reason: '',
   target_clients: '',
+  tag_ids: [],
 }
 
 const form = reactive({ ...emptyForm })
@@ -59,6 +61,7 @@ function openEdit(fund) {
     establish_date: fund.establish_date || '',
     reason: fund.reason || '',
     target_clients: fund.target_clients || '',
+    tag_ids: fund.tags?.map((t) => t.id) || [],
   })
   Object.keys(formErrors).forEach((k) => delete formErrors[k])
   showModal.value = true
@@ -67,6 +70,34 @@ function openEdit(fund) {
 function closeModal() {
   showModal.value = false
 }
+
+function toggleTag(tagId) {
+  const idx = form.tag_ids.indexOf(tagId)
+  if (idx >= 0) {
+    form.tag_ids.splice(idx, 1)
+  } else {
+    form.tag_ids.push(tagId)
+  }
+}
+
+async function fetchTags() {
+  try {
+    const res = await fetchApi('/api/admin/tags')
+    if (!res.ok) throw new Error('加载标签失败')
+    tags.value = await res.json()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const groupedTags = computed(() => {
+  const groups = {}
+  for (const tag of tags.value) {
+    if (!groups[tag.category]) groups[tag.category] = []
+    groups[tag.category].push(tag)
+  }
+  return groups
+})
 
 function validateForm() {
   Object.keys(formErrors).forEach((k) => delete formErrors[k])
@@ -197,7 +228,10 @@ async function syncFund(fund) {
   }
 }
 
-onMounted(fetchFunds)
+onMounted(() => {
+  fetchFunds()
+  fetchTags()
+})
 
 const sortedFunds = computed(() => {
   return [...funds.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
@@ -335,6 +369,28 @@ const sortedFunds = computed(() => {
           <div>
             <label class="block text-sm font-medium mb-1">目标客户</label>
             <input v-model="form.target_clients" type="text" class="input w-full" placeholder="可选" />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">标签</label>
+            <div v-if="tags.length === 0" class="text-sm text-muted">暂无可用标签，请先到“标签管理”添加</div>
+            <div v-else class="space-y-3">
+              <div v-for="(group, category) in groupedTags" :key="category">
+                <div class="text-xs text-muted mb-1">{{ category }}</div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="tag in group"
+                    :key="tag.id"
+                    type="button"
+                    class="px-3 py-1 rounded-full text-sm border transition-colors"
+                    :class="form.tag_ids.includes(tag.id) ? 'bg-brand text-white border-brand' : 'bg-surface-strong border-hairline text-body hover:border-brand'"
+                    @click="toggleTag(tag.id)"
+                  >
+                    {{ tag.name }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="flex justify-end gap-3 pt-4">

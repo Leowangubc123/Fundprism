@@ -24,6 +24,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class TagSummary(BaseModel):
+    id: UUID
+    name: str
+    category: str
+
+    class Config:
+        from_attributes = True
+
+
 class FundCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
@@ -34,6 +43,7 @@ class FundCreateRequest(BaseModel):
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
+    tag_ids: Optional[List[UUID]] = Field(default_factory=list)
 
 
 class FundUpdateRequest(BaseModel):
@@ -44,6 +54,7 @@ class FundUpdateRequest(BaseModel):
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
+    tag_ids: Optional[List[UUID]] = None
 
 
 class AdminFundListItem(BaseModel):
@@ -57,6 +68,7 @@ class AdminFundListItem(BaseModel):
     nav: Optional[float]
     daily_return: Optional[float]
     latest_nav_date: Optional[date]
+    tags: List[TagSummary] = []
 
     class Config:
         from_attributes = True
@@ -85,6 +97,7 @@ class FundListItem(BaseModel):
     category: str
     nav: Optional[float]
     daily_return: Optional[float]
+    tags: List[TagSummary] = []
 
     class Config:
         from_attributes = True
@@ -97,6 +110,7 @@ class FundDetail(BaseModel):
     category: str
     nav: Optional[float]
     daily_return: Optional[float]
+    tags: List[TagSummary] = []
 
     class Config:
         from_attributes = True
@@ -120,3 +134,30 @@ class FundCompareItem(FundDetail):
 
 class FundCompareResponse(BaseModel):
     funds: List[FundCompareItem]
+
+
+class TagCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    category: str = Field(..., min_length=1, max_length=32)
+    sort_order: int = Field(0, ge=0)
+    is_active: bool = True
+
+
+class TagUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=64)
+    category: Optional[str] = Field(None, min_length=1, max_length=32)
+    sort_order: Optional[int] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+
+
+class TagItem(BaseModel):
+    id: UUID
+    name: str
+    category: str
+    sort_order: int
+    is_active: bool
+    created_at: Optional[date] = None
+    updated_at: Optional[date] = None
+
+    class Config:
+        from_attributes = True

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
+from app.models.tag import FundTag, Tag
 from app.models.tier import FundCurrentTier
 from app.models.user import User
 from app.schemas import (
@@ -18,6 +19,7 @@ from app.schemas import (
     FundUpdateRequest,
     Market,
     SyncResponse,
+    TagSummary,
 )
 from app.security import get_current_admin
 from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
@@ -32,7 +34,35 @@ def _to_float(value) -> Optional[float]:
     return float(value) if value is not None else None
 
 
-def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance], latest_date) -> AdminFundListItem:
+def _tag_summaries(db: Session, fund_id: UUID) -> List[TagSummary]:
+    tags = (
+        db.query(Tag)
+        .join(FundTag, FundTag.tag_id == Tag.id)
+        .filter(FundTag.fund_id == fund_id, Tag.is_active.is_(True))
+        .order_by(Tag.category, Tag.sort_order, Tag.name)
+        .all()
+    )
+    return [TagSummary(id=t.id, name=t.name, category=t.category) for t in tags]
+
+
+def _apply_tag_ids(db: Session, fund: Fund, tag_ids: Optional[List[UUID]]) -> None:
+    if tag_ids is None:
+        return
+    db.query(FundTag).filter(FundTag.fund_id == fund.id).delete(synchronize_session=False)
+    if tag_ids:
+        valid_tags = (
+            db.query(Tag)
+            .filter(Tag.id.in_(tag_ids), Tag.is_active.is_(True))
+            .all()
+        )
+        valid_ids = {t.id for t in valid_tags}
+        if len(valid_ids) != len(set(tag_ids)):
+            raise HTTPException(status_code=400, detail="One or more tags are invalid or inactive")
+        for tag_id in tag_ids:
+            db.add(FundTag(fund_id=fund.id, tag_id=tag_id))
+
+
+def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance], latest_date, tags: List[TagSummary]) -> AdminFundListItem:
     return AdminFundListItem(
         id=fund.id,
         name=fund.name,
@@ -44,6 +74,7 @@ def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
         latest_nav_date=latest_date,
+        tags=tags,
     )
 
 
@@ -79,7 +110,7 @@ def list_funds(
     )
 
     return [
-        _build_admin_item(fund, code, perf, latest_date)
+        _build_admin_item(fund, code, perf, latest_date, _tag_summaries(db, fund.id))
         for fund, code, perf, latest_date in results
     ]
 
@@ -114,11 +145,14 @@ def create_fund(
     )
     tier = FundCurrentTier(fund_id=fund.id)
     db.add_all([code, tier])
+
+    _apply_tag_ids(db, fund, payload.tag_ids)
+
     db.commit()
     db.refresh(fund)
     db.refresh(code)
 
-    return _build_admin_item(fund, code, None, None)
+    return _build_admin_item(fund, code, None, None, _tag_summaries(db, fund.id))
 
 
 @router.get("/funds/lookup", response_model=FundBasicLookupResponse)
@@ -168,6 +202,7 @@ def get_fund(
         code,
         latest_perf,
         latest_perf.date if latest_perf else None,
+        _tag_summaries(db, fund.id),
     )
 
 
@@ -183,11 +218,15 @@ def update_fund(
         raise HTTPException(status_code=404, detail="Fund not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    tag_ids = update_data.pop("tag_ids", None)
     for field, value in update_data.items():
         setattr(fund, field, value)
 
     db.commit()
     db.refresh(fund)
+
+    _apply_tag_ids(db, fund, tag_ids)
+    db.commit()
 
     code = (
         db.query(FundCode)
@@ -206,6 +245,7 @@ def update_fund(
         code,
         latest_perf,
         latest_perf.date if latest_perf else None,
+        _tag_summaries(db, fund.id),
     )
 
 
