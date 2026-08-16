@@ -112,6 +112,7 @@ npm run build
 | GET    | `/health` | Health check |
 | POST   | `/api/auth/login` | Login |
 | GET    | `/api/funds` | List/search funds |
+| GET    | `/api/funds?tag=<tag_id>` | Filter funds by tag |
 | GET    | `/api/funds/{id}` | Fund detail |
 | GET    | `/api/funds/{id}/nav` | NAV history |
 | GET    | `/api/funds/compare?ids=...` | Compare selected funds |
@@ -122,6 +123,10 @@ All admin endpoints require a user with `role=admin`.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET    | `/api/admin/tags` | List tags |
+| POST   | `/api/admin/tags` | Create tag |
+| PUT    | `/api/admin/tags/{id}` | Update tag |
+| DELETE | `/api/admin/tags/{id}` | Deactivate tag |
 | GET    | `/api/admin/funds/lookup?code=...&market=...` | Lookup fund basic info from Tushare |
 | GET    | `/api/admin/funds` | List all funds in product pool |
 | POST   | `/api/admin/funds` | Create a new fund |
@@ -142,6 +147,7 @@ All admin endpoints require a user with `role=admin`.
 | `/compare` | CompareView | authenticated |
 | `/admin` | AdminLayout → redirect to `/admin/funds` | admin only |
 | `/admin/funds` | FundManagementView | admin only |
+| `/admin/tags` | TagManagementView | admin only |
 
 ---
 
