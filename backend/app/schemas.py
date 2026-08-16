@@ -156,8 +156,6 @@ class TagItem(BaseModel):
     category: str
     sort_order: int
     is_active: bool
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
 
     class Config:
         from_attributes = True
