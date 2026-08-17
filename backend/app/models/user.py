@@ -25,4 +25,5 @@ class User(Base, TimestampMixin):
     last_login_at = Column(DateTime, nullable=True)
 
     tier_histories = relationship("FundTierHistory", back_populates="operator")
+    tier_adjustments = relationship("FundCurrentTier", back_populates="adjusted_by")
     download_logs = relationship("MaterialDownloadLog", back_populates="user")

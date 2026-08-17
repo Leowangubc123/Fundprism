@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Date, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, Date, JSON, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -9,6 +9,8 @@ from app.database import Base
 
 # Use JSON for portability across PostgreSQL and SQLite.
 MetricsJSON = JSON()
+
+TIER_OPTIONS = ["主推", "备选", "替代", "观察"]
 
 
 class FundCurrentTier(Base):
@@ -22,11 +24,14 @@ class FundCurrentTier(Base):
     suggested_at = Column(DateTime, nullable=True)
     adjusted_at = Column(DateTime, nullable=True)
     manual_lock_until = Column(Date, nullable=True)
+    adjusted_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    adjusted_reason = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     fund = relationship("Fund", back_populates="tier")
+    adjusted_by = relationship("User", back_populates="tier_adjustments")
 
 
 class FundTierHistory(Base):

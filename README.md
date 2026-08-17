@@ -112,7 +112,7 @@ npm run build
 | GET    | `/health` | Health check |
 | POST   | `/api/auth/login` | Login |
 | GET    | `/api/funds` | List/search funds |
-| GET    | `/api/funds?tag=<tag_id>` | Filter funds by tag |
+| GET    | `/api/funds?q=...&tag=...&tier=...` | Filter funds by keyword/tag/tier |
 | GET    | `/api/funds/{id}` | Fund detail |
 | GET    | `/api/funds/{id}/nav` | NAV history |
 | GET    | `/api/funds/compare?ids=...` | Compare selected funds |
@@ -134,6 +134,8 @@ All admin endpoints require a user with `role=admin`.
 | PUT    | `/api/admin/funds/{id}` | Update fund info |
 | DELETE | `/api/admin/funds/{id}` | Delete fund and related data |
 | POST   | `/api/admin/funds/{id}/sync` | Sync NAV history from Tushare |
+| GET    | `/api/admin/funds/{id}/tier` | Get current/suggested tier |
+| PUT    | `/api/admin/funds/{id}/tier` | Adjust tier (with reason) |
 
 ---
 
@@ -221,6 +223,7 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 ## Notes
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
-- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, and trigger per-fund NAV sync.
+- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, trigger per-fund NAV sync, and adjust tier ratings.
+- The tier system supports four levels: 主推 / 备选 / 替代 / 观察. Adjustments require a reason and automatically lock the fund tier for 30 days.
 - Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.

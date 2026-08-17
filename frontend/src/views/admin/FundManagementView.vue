@@ -11,6 +11,13 @@ const showModal = ref(false)
 const isEditing = ref(false)
 const editingFundId = ref(null)
 const syncingId = ref(null)
+const showTierModal = ref(false)
+const tierEditingFund = ref(null)
+const tierForm = reactive({
+  current_tier: '观察',
+  reason: '',
+})
+const tierFormErrors = reactive({})
 
 const marketOptions = [
   { value: 'OF', label: '场外' },
@@ -18,7 +25,16 @@ const marketOptions = [
   { value: 'SZ', label: '深圳（SZ）' },
 ]
 
+const tierOptions = [
+  { value: '主推', label: '主推', class: 'bg-green-100 text-green-700 border-green-200' },
+  { value: '备选', label: '备选', class: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { value: '替代', label: '替代', class: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  { value: '观察', label: '观察', class: 'bg-gray-100 text-gray-600 border-gray-200' },
+]
+
 const marketLabel = (value) => marketOptions.find((o) => o.value === value)?.label || value
+const tierLabel = (value) => tierOptions.find((o) => o.value === value)?.label || value
+const tierClass = (value) => tierOptions.find((o) => o.value === value)?.class || 'bg-surface-strong text-body border-hairline'
 
 const emptyForm = {
   name: '',
@@ -69,6 +85,56 @@ function openEdit(fund) {
 
 function closeModal() {
   showModal.value = false
+}
+
+function openTier(fund) {
+  tierEditingFund.value = fund
+  tierForm.current_tier = fund.current_tier || '观察'
+  tierForm.reason = ''
+  Object.keys(tierFormErrors).forEach((k) => delete tierFormErrors[k])
+  showTierModal.value = true
+}
+
+function closeTierModal() {
+  showTierModal.value = false
+  tierEditingFund.value = null
+}
+
+function validateTierForm() {
+  Object.keys(tierFormErrors).forEach((k) => delete tierFormErrors[k])
+  let ok = true
+  if (!tierForm.current_tier) {
+    tierFormErrors.current_tier = '请选择等级'
+    ok = false
+  }
+  if (!tierForm.reason.trim() || tierForm.reason.trim().length < 10) {
+    tierFormErrors.reason = '原因至少需要 10 个字'
+    ok = false
+  }
+  return ok
+}
+
+async function submitTier() {
+  if (!validateTierForm()) return
+
+  error.value = ''
+  message.value = ''
+  try {
+    const res = await fetchApi(`/api/admin/funds/${tierEditingFund.value.id}/tier`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_tier: tierForm.current_tier,
+        reason: tierForm.reason.trim(),
+      }),
+    })
+    if (!res.ok) throw new Error('调整等级失败')
+    message.value = `${tierEditingFund.value.name} 等级已调整为 ${tierLabel(tierForm.current_tier)}`
+    closeTierModal()
+    await fetchFunds()
+  } catch (e) {
+    error.value = e.message || '调整等级失败'
+  }
 }
 
 function toggleTag(tagId) {
@@ -260,6 +326,7 @@ const sortedFunds = computed(() => {
             <th class="px-5 py-3 font-semibold">市场</th>
             <th class="px-5 py-3 font-semibold">分类</th>
             <th class="px-5 py-3 font-semibold">风险等级</th>
+            <th class="px-5 py-3 font-semibold">当前等级</th>
             <th class="px-5 py-3 font-semibold">基金经理</th>
             <th class="px-5 py-3 font-semibold">最新净值日期</th>
             <th class="px-5 py-3 font-semibold text-right">操作</th>
@@ -276,6 +343,14 @@ const sortedFunds = computed(() => {
             <td class="px-5 py-4">{{ marketLabel(fund.market) }}</td>
             <td class="px-5 py-4">{{ fund.category }}</td>
             <td class="px-5 py-4">{{ fund.risk_level }}</td>
+            <td class="px-5 py-4">
+              <span
+                class="text-xs px-2 py-1 rounded-full border"
+                :class="tierClass(fund.current_tier)"
+              >
+                {{ tierLabel(fund.current_tier) }}
+              </span>
+            </td>
             <td class="px-5 py-4">{{ fund.manager || '-' }}</td>
             <td class="px-5 py-4">{{ fund.latest_nav_date || '-' }}</td>
             <td class="px-5 py-4 text-right">
@@ -288,6 +363,7 @@ const sortedFunds = computed(() => {
               >
                 {{ syncingId === fund.id ? '同步中...' : '同步' }}
               </button>
+              <button type="button" class="text-brand hover:underline mr-3" @click="openTier(fund)">调整等级</button>
               <button type="button" class="text-up hover:underline" @click="deleteFund(fund)">删除</button>
             </td>
           </tr>
@@ -396,6 +472,38 @@ const sortedFunds = computed(() => {
           <div class="flex justify-end gap-3 pt-4">
             <button type="button" class="btn-secondary" @click="closeModal">取消</button>
             <button type="submit" class="btn-primary">{{ isEditing ? '保存' : '创建' }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tier Modal -->
+    <div
+      v-if="showTierModal"
+      class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      @click.self="closeTierModal"
+    >
+      <div class="bg-canvas rounded-3xl border border-hairline w-full max-w-md p-6">
+        <h2 class="text-xl font-bold mb-6">调整等级：{{ tierEditingFund?.name }}</h2>
+
+        <form class="space-y-4" @submit.prevent="submitTier">
+          <div>
+            <label class="block text-sm font-medium mb-1">当前等级 *</label>
+            <select v-model="tierForm.current_tier" class="input w-full">
+              <option v-for="opt in tierOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <p v-if="tierFormErrors.current_tier" class="text-up text-xs mt-1">{{ tierFormErrors.current_tier }}</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1">调整原因 *（至少 10 字）</label>
+            <textarea v-model="tierForm.reason" rows="3" class="input w-full" placeholder="例如：季度复核后夏普与回撤均符合主推标准"></textarea>
+            <p v-if="tierFormErrors.reason" class="text-up text-xs mt-1">{{ tierFormErrors.reason }}</p>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-4">
+            <button type="button" class="btn-secondary" @click="closeTierModal">取消</button>
+            <button type="submit" class="btn-primary">保存</button>
           </div>
         </form>
       </div>

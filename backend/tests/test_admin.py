@@ -8,7 +8,7 @@ import pytest
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
 from app.models.sync import SyncLog
-from app.models.tier import FundCurrentTier
+from app.models.tier import FundCurrentTier, FundTierHistory
 
 
 def test_list_funds_requires_admin(client, auth_headers):
@@ -162,3 +162,41 @@ def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
 def test_lookup_fund_requires_admin(client, auth_headers):
     response = client.get("/api/admin/funds/lookup?code=000006&market=OF", headers=auth_headers)
     assert response.status_code == 403
+
+
+def test_get_fund_tier_creates_default(client, admin_headers, db):
+    fund = Fund(name="等级基金", category="混合型", risk_level="中")
+    db.add(fund)
+    db.flush()
+    db.add(FundCode(fund_id=fund.id, code="000007", market="OF", is_primary=True))
+    db.commit()
+
+    response = client.get(f"/api/admin/funds/{fund.id}/tier", headers=admin_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["current_tier"] == "观察"
+
+
+def test_update_fund_tier(client, admin_headers, db, admin_user):
+    fund = Fund(name="调整等级基金", category="混合型", risk_level="中")
+    db.add(fund)
+    db.flush()
+    db.add(FundCode(fund_id=fund.id, code="000008", market="OF", is_primary=True))
+    db.commit()
+
+    response = client.put(
+        f"/api/admin/funds/{fund.id}/tier",
+        json={"current_tier": "主推", "reason": "季度复核结果符合主推标准"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["current_tier"] == "主推"
+    assert data["adjusted_reason"] == "季度复核结果符合主推标准"
+    assert data["adjusted_by"] == admin_user.username
+    assert data["manual_lock_until"] is not None
+
+    history = db.query(FundTierHistory).filter(FundTierHistory.fund_id == fund.id).first()
+    assert history is not None
+    assert history.previous_tier == "观察"
+    assert history.new_tier == "主推"

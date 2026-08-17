@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
 from uuid import UUID
@@ -68,6 +68,7 @@ class AdminFundListItem(BaseModel):
     nav: Optional[float]
     daily_return: Optional[float]
     latest_nav_date: Optional[date]
+    current_tier: Optional[str] = None
     tags: List[TagSummary] = []
 
     class Config:
@@ -79,6 +80,25 @@ class SyncResponse(BaseModel):
     status: str
     records_count: int
     message: Optional[str] = None
+
+
+class TierInfo(BaseModel):
+    fund_id: UUID
+    current_tier: str
+    suggested_tier: Optional[str] = None
+    suggested_at: Optional[datetime] = None
+    adjusted_at: Optional[datetime] = None
+    adjusted_by: Optional[str] = None
+    adjusted_reason: Optional[str] = None
+    manual_lock_until: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TierUpdateRequest(BaseModel):
+    current_tier: str = Field(..., min_length=1, max_length=16)
+    reason: str = Field(..., min_length=10, max_length=1000)
 
 
 class FundBasicLookupResponse(BaseModel):
@@ -97,6 +117,7 @@ class FundListItem(BaseModel):
     category: str
     nav: Optional[float]
     daily_return: Optional[float]
+    current_tier: Optional[str] = None
     tags: List[TagSummary] = []
 
     class Config:
@@ -110,6 +131,7 @@ class FundDetail(BaseModel):
     category: str
     nav: Optional[float]
     daily_return: Optional[float]
+    current_tier: Optional[str] = None
     tags: List[TagSummary] = []
 
     class Config:

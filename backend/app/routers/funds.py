@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
 from app.models.tag import FundTag, Tag
+from app.models.tier import FundCurrentTier
 from app.models.user import User
 from app.schemas import (
     FundCompareItem,
@@ -74,6 +75,7 @@ def _base_fund_query(db: Session):
 def list_funds(
     q: str = "",
     tag: str = "",
+    tier: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -94,6 +96,10 @@ def list_funds(
                 .subquery()
             )
             query = query.filter(Fund.id.in_(fund_ids))
+    if tier:
+        query = query.join(
+            FundCurrentTier, FundCurrentTier.fund_id == Fund.id
+        ).filter(FundCurrentTier.current_tier == tier)
     results = query.order_by(Fund.name).all()
     out = []
     for fund, code, perf in results:
@@ -105,6 +111,7 @@ def list_funds(
                 category=fund.category,
                 nav=_to_float(perf.nav) if perf else None,
                 daily_return=_to_float(perf.daily_return) if perf else None,
+                current_tier=fund.tier.current_tier if fund.tier else None,
                 tags=_tag_summaries(db, fund.id),
             )
         )
@@ -194,6 +201,7 @@ def compare_funds(
                 category=fund.category,
                 nav=_to_float(perf.nav) if perf else None,
                 daily_return=_to_float(perf.daily_return) if perf else None,
+                current_tier=fund.tier.current_tier if fund.tier else None,
                 manager=fund.manager,
                 nav_history=nav_history,
                 tags=_tag_summaries(db, fund.id),
@@ -220,6 +228,7 @@ def get_fund(
         category=fund.category,
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
+        current_tier=fund.tier.current_tier if fund.tier else None,
         tags=_tag_summaries(db, fund.id),
     )
 

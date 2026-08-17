@@ -11,12 +11,23 @@ const funds = ref([])
 const tags = ref([])
 const keyword = ref('')
 const selectedTag = ref('')
+const selectedTier = ref('')
 const loading = ref(false)
 const error = ref('')
 
 const selectedIds = ref([])
 const selectedSet = computed(() => new Set(selectedIds.value))
 const isCompareDisabled = computed(() => selectedIds.value.length < 2)
+
+const tierOptions = [
+  { value: '主推', label: '主推', class: 'bg-green-100 text-green-700 border-green-200' },
+  { value: '备选', label: '备选', class: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { value: '替代', label: '替代', class: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  { value: '观察', label: '观察', class: 'bg-gray-100 text-gray-600 border-gray-200' },
+]
+
+const tierLabel = (value) => tierOptions.find((o) => o.value === value)?.label || value
+const tierClass = (value) => tierOptions.find((o) => o.value === value)?.class || 'bg-surface-strong text-body border-hairline'
 
 async function fetchFunds() {
   loading.value = true
@@ -25,6 +36,9 @@ async function fetchFunds() {
     let url = `/api/funds?q=${encodeURIComponent(keyword.value.trim())}`
     if (selectedTag.value) {
       url += `&tag=${encodeURIComponent(selectedTag.value)}`
+    }
+    if (selectedTier.value) {
+      url += `&tier=${encodeURIComponent(selectedTier.value)}`
     }
     const res = await fetchApi(url)
     if (!res.ok) throw new Error('加载失败')
@@ -113,6 +127,10 @@ onMounted(() => {
               <option v-for="tag in group" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
             </optgroup>
           </select>
+          <select v-model="selectedTier" class="input w-36" @change="fetchFunds">
+            <option value="">全部等级</option>
+            <option v-for="opt in tierOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
         </div>
         <div class="flex items-center gap-3">
           <span v-if="selectedIds.length" class="text-sm text-body">
@@ -150,7 +168,16 @@ onMounted(() => {
                 <h3 class="font-semibold text-ink">{{ fund.name }}</h3>
                 <p class="text-xs text-muted mt-1">{{ fund.code }}</p>
               </div>
-              <span class="text-xs px-2 py-1 rounded-full bg-surface-strong text-body">{{ fund.category }}</span>
+              <div class="flex items-center gap-2">
+                <span
+                  v-if="fund.current_tier"
+                  class="text-xs px-2 py-1 rounded-full border"
+                  :class="tierClass(fund.current_tier)"
+                >
+                  {{ tierLabel(fund.current_tier) }}
+                </span>
+                <span class="text-xs px-2 py-1 rounded-full bg-surface-strong text-body">{{ fund.category }}</span>
+              </div>
             </div>
             <div class="grid grid-cols-2 gap-3 text-sm mb-3">
               <div>
