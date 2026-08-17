@@ -20,6 +20,7 @@ const router = createRouter({
         { path: '', redirect: '/admin/funds' },
         { path: 'funds', component: () => import('./views/admin/FundManagementView.vue') },
         { path: 'tags', component: () => import('./views/admin/TagManagementView.vue') },
+        { path: 'users', component: () => import('./views/admin/UserManagementView.vue') },
       ],
     },
   ],

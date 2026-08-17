@@ -123,6 +123,11 @@ All admin endpoints require a user with `role=admin`.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET    | `/api/admin/users` | List all users |
+| POST   | `/api/admin/users` | Create user |
+| PUT    | `/api/admin/users/{id}` | Update user info / role / status |
+| POST   | `/api/admin/users/{id}/reset-password` | Reset user password |
+| DELETE | `/api/admin/users/{id}` | Delete user (cannot delete self) |
 | GET    | `/api/admin/tags` | List tags |
 | POST   | `/api/admin/tags` | Create tag |
 | PUT    | `/api/admin/tags/{id}` | Update tag / activate / deactivate |
@@ -151,6 +156,7 @@ All admin endpoints require a user with `role=admin`.
 | `/admin` | AdminLayout → redirect to `/admin/funds` | admin only |
 | `/admin/funds` | FundManagementView | admin only |
 | `/admin/tags` | TagManagementView | admin only |
+| `/admin/users` | UserManagementView | admin only |
 
 ---
 
@@ -225,6 +231,7 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
 - Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, trigger per-fund NAV sync, and adjust tier ratings.
+- Admin users can manage tags at `/admin/tags` and user accounts at `/admin/users`.
 - The tier system supports four levels: 主推 / 备选 / 替代 / 观察. Adjustments require a reason and automatically lock the fund tier for 30 days.
 - Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.

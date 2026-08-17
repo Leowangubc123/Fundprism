@@ -26,7 +26,7 @@ async function handleLogin() {
       error.value = data.message || '登录失败'
       return
     }
-    auth.login(data.token, data.role, data.username)
+    auth.login(data.token, data.role, data.username, data.id)
     router.push('/overview')
   } catch (e) {
     error.value = '网络错误，请稍后重试'

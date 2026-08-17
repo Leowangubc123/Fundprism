@@ -17,11 +17,39 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     username: str
+    id: UUID
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class UserListItem(BaseModel):
+    id: UUID
+    username: str
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+    last_login_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    password: str = Field(..., min_length=6, max_length=64)
+    full_name: Optional[str] = Field(None, max_length=64)
+    role: str = Field(..., pattern="^(sales|admin)$")
+    is_active: bool = True
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = Field(None, max_length=64)
+    role: Optional[str] = Field(None, pattern="^(sales|admin)$")
+    is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=64)
 
 
 class TagSummary(BaseModel):

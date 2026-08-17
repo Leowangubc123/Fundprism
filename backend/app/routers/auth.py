@@ -19,4 +19,4 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user.last_login_at = datetime.utcnow()
     db.commit()
     token = create_access_token({"sub": str(user.id)})
-    return {"token": token, "role": user.role, "username": user.username}
+    return {"token": token, "role": user.role, "username": user.username, "id": user.id}
