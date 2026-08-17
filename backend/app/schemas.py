@@ -103,6 +103,30 @@ class AdminFundListItem(BaseModel):
         from_attributes = True
 
 
+class SyncLogItem(BaseModel):
+    id: UUID
+    sync_type: str
+    status: str
+    records_count: int
+    failed_records: int
+    error_message: Optional[str] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    fund_id: Optional[UUID] = None
+    fund_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SyncRunResponse(BaseModel):
+    status: str
+    total: int
+    successful: int
+    failed: int
+    message: str
+
+
 class SyncResponse(BaseModel):
     fund_id: UUID
     status: str

@@ -10,6 +10,7 @@ const navItems = [
   { path: '/admin/funds', label: '基金管理' },
   { path: '/admin/tags', label: '标签管理' },
   { path: '/admin/users', label: '用户管理' },
+  { path: '/admin/sync-logs', label: '同步日志' },
 ]
 
 function isActive(path) {

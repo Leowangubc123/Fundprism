@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
+from app.models.sync import SyncLog
 from app.models.tag import FundTag, Tag
 from app.models.tier import FundCurrentTier, FundTierHistory, TIER_OPTIONS
 from app.models.user import User
@@ -19,12 +20,15 @@ from app.schemas import (
     FundCreateRequest,
     FundUpdateRequest,
     Market,
+    SyncLogItem,
     SyncResponse,
+    SyncRunResponse,
     TagSummary,
     TierInfo,
     TierUpdateRequest,
 )
 from app.security import get_current_admin
+from app.services.scheduler import run_daily_sync
 from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -402,3 +406,41 @@ def clear_fund_tier_lock(
     db.refresh(tier)
 
     return _tier_info(tier)
+
+
+@router.get("/sync-logs", response_model=List[SyncLogItem])
+def list_sync_logs(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    logs = (
+        db.query(SyncLog, Fund.name.label("fund_name"))
+        .outerjoin(Fund, SyncLog.fund_id == Fund.id)
+        .order_by(SyncLog.started_at.desc())
+        .limit(100)
+        .all()
+    )
+    result = []
+    for log, fund_name in logs:
+        item = SyncLogItem(
+            id=log.id,
+            sync_type=log.sync_type,
+            status=log.status,
+            records_count=log.records_count,
+            failed_records=log.failed_records,
+            error_message=log.error_message,
+            started_at=log.started_at,
+            ended_at=log.ended_at,
+            fund_id=log.fund_id,
+            fund_name=fund_name,
+        )
+        result.append(item)
+    return result
+
+
+@router.post("/sync/run", response_model=SyncRunResponse)
+def trigger_daily_sync(
+    user: User = Depends(get_current_admin),
+):
+    summary = run_daily_sync()
+    return SyncRunResponse(**summary)

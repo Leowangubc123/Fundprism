@@ -87,6 +87,7 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
         sync_type="fund_nav",
         status="running",
         records_count=0,
+        fund_id=fund_id,
     )
     db.add(sync_log)
     db.commit()

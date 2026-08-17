@@ -21,6 +21,7 @@ const router = createRouter({
         { path: 'funds', component: () => import('./views/admin/FundManagementView.vue') },
         { path: 'tags', component: () => import('./views/admin/TagManagementView.vue') },
         { path: 'users', component: () => import('./views/admin/UserManagementView.vue') },
+        { path: 'sync-logs', component: () => import('./views/admin/SyncLogManagementView.vue') },
       ],
     },
   ],

@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import User
 from app.routers import admin, auth, funds, tags, users
 from app.security import get_password_hash
+from app.services.scheduler import shutdown_scheduler, start_scheduler
 
 
 @asynccontextmanager
@@ -27,7 +28,9 @@ async def lifespan(app: FastAPI):
                 )
             )
             db.commit()
+    start_scheduler()
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(title="Fund Evaluation API", version="1.0.0", lifespan=lifespan)

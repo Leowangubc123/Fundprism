@@ -29,6 +29,7 @@ class Fund(Base):
     tier = relationship("FundCurrentTier", back_populates="fund", uselist=False, cascade="all, delete-orphan")
     tier_histories = relationship("FundTierHistory", back_populates="fund", cascade="all, delete-orphan")
     materials = relationship("FundMaterial", back_populates="fund", cascade="all, delete-orphan")
+    sync_logs = relationship("SyncLog", back_populates="fund")
 
 
 class FundCode(Base):

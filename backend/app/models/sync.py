@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Integer, Text, DateTime
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -19,3 +20,6 @@ class SyncLog(Base):
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     ended_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fund_id = Column(UUID(as_uuid=True), ForeignKey("funds.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    fund = relationship("Fund", back_populates="sync_logs")
