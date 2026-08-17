@@ -137,6 +137,23 @@ async function submitTier() {
   }
 }
 
+async function clearTierLock() {
+  error.value = ''
+  message.value = ''
+  try {
+    const res = await fetchApi(`/api/admin/funds/${tierEditingFund.value.id}/tier/clear-lock`, {
+      method: 'POST',
+    })
+    if (!res.ok) throw new Error('恢复自动评级失败')
+    const data = await res.json()
+    message.value = `${tierEditingFund.value.name} 已恢复自动评级（当前等级：${tierLabel(data.current_tier)}）`
+    closeTierModal()
+    await fetchFunds()
+  } catch (e) {
+    error.value = e.message || '恢复自动评级失败'
+  }
+}
+
 function toggleTag(tagId) {
   const idx = form.tag_ids.indexOf(tagId)
   if (idx >= 0) {
@@ -503,6 +520,7 @@ const sortedFunds = computed(() => {
 
           <div class="flex justify-end gap-3 pt-4">
             <button type="button" class="btn-secondary" @click="closeTierModal">取消</button>
+            <button type="button" class="btn-secondary" @click="clearTierLock">恢复自动评级</button>
             <button type="submit" class="btn-primary">保存</button>
           </div>
         </form>

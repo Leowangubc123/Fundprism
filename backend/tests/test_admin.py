@@ -200,3 +200,32 @@ def test_update_fund_tier(client, admin_headers, db, admin_user):
     assert history is not None
     assert history.previous_tier == "观察"
     assert history.new_tier == "主推"
+
+
+def test_clear_fund_tier_lock(client, admin_headers, db, admin_user):
+    fund = Fund(name="恢复自动评级基金", category="混合型", risk_level="中")
+    db.add(fund)
+    db.flush()
+    db.add(FundCode(fund_id=fund.id, code="000009", market="OF", is_primary=True))
+    db.commit()
+
+    tier = FundCurrentTier(fund_id=fund.id, current_tier="主推", suggested_tier="备选", manual_lock_until=date(2026, 12, 31))
+    db.add(tier)
+    db.commit()
+
+    response = client.post(
+        f"/api/admin/funds/{fund.id}/tier/clear-lock",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["current_tier"] == "备选"
+    assert data["manual_lock_until"] is None
+    assert data["adjusted_reason"] == "取消手动锁定，恢复自动评级"
+
+    history = (
+        db.query(FundTierHistory)
+        .filter(FundTierHistory.fund_id == fund.id, FundTierHistory.new_tier == "备选")
+        .first()
+    )
+    assert history is not None

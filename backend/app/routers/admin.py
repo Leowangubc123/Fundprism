@@ -357,3 +357,48 @@ def update_fund_tier(
     db.refresh(tier)
 
     return _tier_info(tier)
+
+
+@router.post("/funds/{fund_id}/tier/clear-lock", response_model=TierInfo)
+def clear_fund_tier_lock(
+    fund_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+
+    tier = db.query(FundCurrentTier).filter(FundCurrentTier.fund_id == fund_id).first()
+    if not tier:
+        tier = FundCurrentTier(fund_id=fund_id)
+        db.add(tier)
+        db.flush()
+
+    previous_tier = tier.current_tier
+    now = datetime.utcnow()
+    reason = "取消手动锁定，恢复自动评级"
+
+    if tier.suggested_tier:
+        tier.current_tier = tier.suggested_tier
+
+    tier.adjusted_at = now
+    tier.adjusted_by_id = user.id
+    tier.adjusted_reason = reason
+    tier.manual_lock_until = None
+
+    history = FundTierHistory(
+        fund_id=fund_id,
+        operator_id=user.id,
+        previous_tier=previous_tier,
+        new_tier=tier.current_tier,
+        reason=reason,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.add(history)
+
+    db.commit()
+    db.refresh(tier)
+
+    return _tier_info(tier)

@@ -135,7 +135,8 @@ All admin endpoints require a user with `role=admin`.
 | DELETE | `/api/admin/funds/{id}` | Delete fund and related data |
 | POST   | `/api/admin/funds/{id}/sync` | Sync NAV history from Tushare |
 | GET    | `/api/admin/funds/{id}/tier` | Get current/suggested tier |
-| PUT    | `/api/admin/funds/{id}/tier` | Adjust tier (with reason) |
+| PUT    | `/api/admin/funds/{id}/tier` | Adjust tier (with reason, locks 30 days) |
+| POST   | `/api/admin/funds/{id}/tier/clear-lock` | Clear manual lock and resume auto tiering |
 
 ---
 
