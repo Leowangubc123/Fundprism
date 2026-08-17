@@ -161,14 +161,12 @@ class FundCompareResponse(BaseModel):
 class TagCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     category: str = Field(..., min_length=1, max_length=32)
-    sort_order: int = Field(0, ge=0)
     is_active: bool = True
 
 
 class TagUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=64)
     category: Optional[str] = Field(None, min_length=1, max_length=32)
-    sort_order: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
 
 
@@ -176,7 +174,6 @@ class TagItem(BaseModel):
     id: UUID
     name: str
     category: str
-    sort_order: int
     is_active: bool
 
     class Config:

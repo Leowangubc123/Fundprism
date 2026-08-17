@@ -125,8 +125,8 @@ All admin endpoints require a user with `role=admin`.
 |--------|------|-------------|
 | GET    | `/api/admin/tags` | List tags |
 | POST   | `/api/admin/tags` | Create tag |
-| PUT    | `/api/admin/tags/{id}` | Update tag |
-| DELETE | `/api/admin/tags/{id}` | Deactivate tag |
+| PUT    | `/api/admin/tags/{id}` | Update tag / activate / deactivate |
+| DELETE | `/api/admin/tags/{id}` | Permanently delete tag |
 | GET    | `/api/admin/funds/lookup?code=...&market=...` | Lookup fund basic info from Tushare |
 | GET    | `/api/admin/funds` | List all funds in product pool |
 | POST   | `/api/admin/funds` | Create a new fund |

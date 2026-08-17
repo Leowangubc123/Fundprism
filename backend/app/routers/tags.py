@@ -25,7 +25,7 @@ def list_tags(
         query = query.filter(Tag.category == category)
     if not include_inactive:
         query = query.filter(Tag.is_active.is_(True))
-    return query.order_by(Tag.category, Tag.sort_order, Tag.name).all()
+    return query.order_by(Tag.category, Tag.name).all()
 
 
 @router.post("", response_model=TagItem, status_code=status.HTTP_201_CREATED)
@@ -84,7 +84,6 @@ def delete_tag(
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
 
-    # Soft delete: mark inactive instead of removing, preserving historical data.
-    tag.is_active = False
+    db.delete(tag)
     db.commit()
     return None

@@ -18,7 +18,6 @@ const categoryOptions = [
 const emptyForm = {
   name: '',
   category: '策略/主题',
-  sort_order: 0,
   is_active: true,
 }
 
@@ -43,7 +42,6 @@ function openEdit(tag) {
   Object.assign(form, {
     name: tag.name,
     category: tag.category,
-    sort_order: tag.sort_order ?? 0,
     is_active: tag.is_active,
   })
   Object.keys(formErrors).forEach((k) => delete formErrors[k])
@@ -130,6 +128,21 @@ async function toggleTag(tag) {
   }
 }
 
+async function deleteTag(tag) {
+  if (!confirm(`确定永久删除标签“${tag.name}”吗？已关联的基金将自动取消该标签。`)) return
+
+  error.value = ''
+  message.value = ''
+  try {
+    const res = await fetchApi(`/api/admin/tags/${tag.id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('删除失败')
+    message.value = '标签已删除'
+    await fetchTags()
+  } catch (e) {
+    error.value = e.message || '删除失败'
+  }
+}
+
 onMounted(fetchTags)
 
 const groupedTags = computed(() => {
@@ -139,7 +152,7 @@ const groupedTags = computed(() => {
     groups[tag.category].push(tag)
   }
   for (const key of Object.keys(groups)) {
-    groups[key].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, 'zh-CN'))
+    groups[key].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
   }
   return groups
 })
@@ -170,7 +183,8 @@ const groupedTags = computed(() => {
           >
             <span>{{ tag.name }}</span>
             <button type="button" class="text-xs hover:text-brand" @click="openEdit(tag)">编辑</button>
-            <button type="button" class="text-xs hover:text-up" @click="toggleTag(tag)">
+            <button type="button" class="text-xs hover:text-up" @click="deleteTag(tag)">删除</button>
+            <button type="button" class="text-xs hover:text-body" @click="toggleTag(tag)">
               {{ tag.is_active ? '停用' : '启用' }}
             </button>
           </div>
@@ -200,11 +214,6 @@ const groupedTags = computed(() => {
               <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <p v-if="formErrors.category" class="text-up text-xs mt-1">{{ formErrors.category }}</p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium mb-1">排序（数字越小越靠前）</label>
-            <input v-model.number="form.sort_order" type="number" class="input w-full" />
           </div>
 
           <div class="flex items-center gap-2">
