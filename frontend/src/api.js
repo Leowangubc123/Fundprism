@@ -1,3 +1,5 @@
+import { useAuthStore } from './stores/auth'
+
 const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
 
 export function apiUrl(path) {
@@ -7,11 +9,24 @@ export function apiUrl(path) {
   return `${baseUrl}/${path}`
 }
 
-export function fetchApi(path, options = {}) {
+export async function fetchApi(path, options = {}) {
   const headers = { ...(options.headers || {}) }
   const token = localStorage.getItem('token')
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`
   }
-  return fetch(apiUrl(path), { ...options, headers })
+
+  const response = await fetch(apiUrl(path), { ...options, headers })
+
+  if (
+    response.status === 401 &&
+    !options.skipAuthRedirect &&
+    !path.includes('/auth/login')
+  ) {
+    const auth = useAuthStore()
+    auth.logout()
+    window.location.href = '/login'
+  }
+
+  return response
 }
