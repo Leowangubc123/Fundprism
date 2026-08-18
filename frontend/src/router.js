@@ -22,6 +22,7 @@ const router = createRouter({
         { path: 'tags', component: () => import('./views/admin/TagManagementView.vue') },
         { path: 'users', component: () => import('./views/admin/UserManagementView.vue') },
         { path: 'sync-logs', component: () => import('./views/admin/SyncLogManagementView.vue') },
+        { path: 'import', component: () => import('./views/admin/BatchImportView.vue') },
       ],
     },
   ],

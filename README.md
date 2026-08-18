@@ -144,6 +144,7 @@ All admin endpoints require a user with `role=admin`.
 | POST   | `/api/admin/funds/{id}/tier/clear-lock` | Clear manual lock and resume auto tiering |
 | GET    | `/api/admin/sync-logs` | List recent sync logs |
 | POST   | `/api/admin/sync/run` | Trigger daily sync for all funds manually |
+| POST   | `/api/admin/funds/import` | Batch import funds from Excel |
 
 ---
 
@@ -160,6 +161,7 @@ All admin endpoints require a user with `role=admin`.
 | `/admin/tags` | TagManagementView | admin only |
 | `/admin/users` | UserManagementView | admin only |
 | `/admin/sync-logs` | SyncLogManagementView | admin only |
+| `/admin/import` | BatchImportView | admin only |
 
 ---
 
@@ -236,7 +238,7 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
 - Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, trigger per-fund NAV sync, and adjust tier ratings.
-- Admin users can manage tags at `/admin/tags`, user accounts at `/admin/users`, and view sync logs at `/admin/sync-logs`.
+- Admin users can manage tags at `/admin/tags`, user accounts at `/admin/users`, view sync logs at `/admin/sync-logs`, and batch import funds at `/admin/import`.
 - The backend runs a daily NAV sync job at the configured time when `TUSHARE_TOKEN` is set. You can also trigger a full sync manually from `/admin/sync-logs`.
 - The tier system supports four levels: 主推 / 备选 / 替代 / 观察. Adjustments require a reason and automatically lock the fund tier for 30 days.
 - Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.

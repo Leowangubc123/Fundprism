@@ -3,7 +3,7 @@ from typing import List, Optional
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.models.tier import FundCurrentTier, FundTierHistory, TIER_OPTIONS
 from app.models.user import User
 from app.schemas import (
     AdminFundListItem,
+    BatchImportResponse,
     FundBasicLookupResponse,
     FundCreateRequest,
     FundUpdateRequest,
@@ -28,6 +29,7 @@ from app.schemas import (
     TierUpdateRequest,
 )
 from app.security import get_current_admin
+from app.services.fund_import import import_funds_from_excel
 from app.services.scheduler import run_daily_sync
 from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
 
@@ -444,3 +446,20 @@ def trigger_daily_sync(
 ):
     summary = run_daily_sync()
     return SyncRunResponse(**summary)
+
+
+@router.post("/funds/import", response_model=BatchImportResponse)
+def batch_import_funds(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="请上传 Excel 文件（.xlsx 或 .xls）")
+
+    content = file.file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+
+    result = import_funds_from_excel(db, content)
+    return BatchImportResponse(**result)

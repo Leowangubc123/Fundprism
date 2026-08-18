@@ -134,6 +134,27 @@ class SyncResponse(BaseModel):
     message: Optional[str] = None
 
 
+class FundImportRow(BaseModel):
+    row_number: int
+    code: str
+    market: str = "OF"
+    name: Optional[str] = None
+    category: Optional[str] = None
+    risk_level: Optional[str] = None
+    manager: Optional[str] = None
+    establish_date: Optional[date] = None
+    reason: Optional[str] = None
+    target_clients: Optional[str] = None
+    tags: List[str] = []
+
+
+class BatchImportResponse(BaseModel):
+    created: int
+    updated: int
+    skipped: int
+    errors: List[str]
+
+
 class TierInfo(BaseModel):
     fund_id: UUID
     current_tier: str

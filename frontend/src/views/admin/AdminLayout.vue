@@ -11,6 +11,7 @@ const navItems = [
   { path: '/admin/tags', label: '标签管理' },
   { path: '/admin/users', label: '用户管理' },
   { path: '/admin/sync-logs', label: '同步日志' },
+  { path: '/admin/import', label: '批量导入' },
 ]
 
 function isActive(path) {
