@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.fund import Fund
 from app.models.sync import SyncLog
+from app.services.scoring import run_scoring
 from app.services.tushare_sync import sync_fund_nav
 
 
@@ -60,12 +61,14 @@ def run_daily_sync() -> dict:
         batch_log.ended_at = _now()
         db.commit()
 
+        scoring_summary = run_scoring(db)
+
         return {
             "status": batch_log.status,
             "total": total,
             "successful": successful,
             "failed": failed,
-            "message": f"Synced {successful}/{total} funds" + (f", {failed} failed" if failed else ""),
+            "message": f"Synced {successful}/{total} funds" + (f", {failed} failed" if failed else "") + f"; scored {scoring_summary['scored']} funds",
         }
     finally:
         db.close()

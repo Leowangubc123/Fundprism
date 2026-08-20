@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.daily_tier_suggestion import DailyTierSuggestion
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
 from app.models.sync import SyncLog
@@ -21,6 +22,8 @@ from app.schemas import (
     FundCreateRequest,
     FundUpdateRequest,
     Market,
+    ScoreInfo,
+    ScoringRunResponse,
     SyncLogItem,
     SyncResponse,
     SyncRunResponse,
@@ -31,6 +34,7 @@ from app.schemas import (
 from app.security import get_current_admin
 from app.services.fund_import import import_funds_from_excel
 from app.services.scheduler import run_daily_sync
+from app.services.scoring import run_scoring
 from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -84,6 +88,7 @@ def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance
         daily_return=_to_float(perf.daily_return) if perf else None,
         latest_nav_date=latest_date,
         current_tier=fund.tier.current_tier if fund.tier else None,
+        suggested_tier=fund.tier.suggested_tier if fund.tier else None,
         tags=tags,
     )
 
@@ -463,3 +468,83 @@ def batch_import_funds(
 
     result = import_funds_from_excel(db, content)
     return BatchImportResponse(**result)
+
+
+@router.get("/funds/{fund_id}/score", response_model=ScoreInfo)
+def get_fund_score(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+
+    tier = db.query(FundCurrentTier).filter(FundCurrentTier.fund_id == fund_id).first()
+    current_tier = tier.current_tier if tier else "观察"
+
+    # Run scoring for this fund to ensure latest suggestion exists
+    run_scoring(db, fund_id=fund_id)
+
+    tier = db.query(FundCurrentTier).filter(FundCurrentTier.fund_id == fund_id).first()
+    today = datetime.utcnow().date()
+    suggestion = (
+        db.query(DailyTierSuggestion)
+        .filter(DailyTierSuggestion.fund_id == fund_id, DailyTierSuggestion.date == today)
+        .first()
+    )
+
+    return ScoreInfo(
+        fund_id=fund_id,
+        current_tier=tier.current_tier if tier else current_tier,
+        suggested_tier=tier.suggested_tier if tier else None,
+        score=_to_float(suggestion.score) if suggestion else None,
+        reason=suggestion.reason if suggestion else None,
+    )
+
+
+@router.post("/scoring/run", response_model=ScoringRunResponse)
+def run_scoring_all(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    summary = run_scoring(db)
+    return ScoringRunResponse(**summary)
+
+
+@router.post("/funds/{fund_id}/tier/apply-suggested", response_model=TierInfo)
+def apply_suggested_tier(
+    fund_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+
+    tier = db.query(FundCurrentTier).filter(FundCurrentTier.fund_id == fund_id).first()
+    if not tier or not tier.suggested_tier:
+        raise HTTPException(status_code=400, detail="No suggested tier available")
+
+    previous_tier = tier.current_tier
+    now = datetime.utcnow()
+    tier.current_tier = tier.suggested_tier
+    tier.adjusted_at = now
+    tier.adjusted_by_id = user.id
+    tier.adjusted_reason = "采纳系统建议等级"
+    tier.manual_lock_until = None
+
+    history = FundTierHistory(
+        fund_id=fund_id,
+        operator_id=user.id,
+        previous_tier=previous_tier,
+        new_tier=tier.current_tier,
+        reason="采纳系统建议等级",
+        ip_address=request.client.host if request.client else None,
+    )
+    db.add(history)
+    db.commit()
+    db.refresh(tier)
+
+    return _tier_info(tier)

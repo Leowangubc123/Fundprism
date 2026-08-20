@@ -11,6 +11,7 @@ const showModal = ref(false)
 const isEditing = ref(false)
 const editingFundId = ref(null)
 const syncingId = ref(null)
+const scoring = ref(false)
 const showTierModal = ref(false)
 const tierEditingFund = ref(null)
 const tierForm = reactive({
@@ -311,6 +312,43 @@ async function syncFund(fund) {
   }
 }
 
+async function runScoring() {
+  error.value = ''
+  message.value = ''
+  scoring.value = true
+  try {
+    const res = await fetchApi('/api/admin/scoring/run', { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || '评分失败')
+    message.value = `评分完成：${data.scored} 只基金参与评分，${data.skipped} 只跳过`
+    await fetchFunds()
+  } catch (e) {
+    error.value = e.message || '评分失败'
+  } finally {
+    scoring.value = false
+  }
+}
+
+async function applySuggested(fund) {
+  if (!fund.suggested_tier) {
+    error.value = '该基金暂无系统建议等级'
+    return
+  }
+  if (!confirm(`确定将“${fund.name}”的当前等级调整为系统建议的“${tierLabel(fund.suggested_tier)}”吗？`)) return
+
+  error.value = ''
+  message.value = ''
+  try {
+    const res = await fetchApi(`/api/admin/funds/${fund.id}/tier/apply-suggested`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || '应用失败')
+    message.value = `${fund.name} 已应用系统建议等级：${tierLabel(data.current_tier)}`
+    await fetchFunds()
+  } catch (e) {
+    error.value = e.message || '应用失败'
+  }
+}
+
 onMounted(() => {
   fetchFunds()
   fetchTags()
@@ -325,7 +363,10 @@ const sortedFunds = computed(() => {
   <div class="p-6 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">基金管理</h1>
-      <button type="button" class="btn-primary" @click="openCreate">+ 新增基金</button>
+      <div class="flex gap-3">
+        <button type="button" class="btn-secondary" :disabled="scoring" @click="runScoring">{{ scoring ? '评分中...' : '重新评分' }}</button>
+        <button type="button" class="btn-primary" @click="openCreate">+ 新增基金</button>
+      </div>
     </div>
 
     <div v-if="message" class="mb-4 p-4 rounded-xl bg-green-50 text-green-700 border border-green-200">{{ message }}</div>
@@ -344,6 +385,7 @@ const sortedFunds = computed(() => {
             <th class="px-5 py-3 font-semibold">分类</th>
             <th class="px-5 py-3 font-semibold">风险等级</th>
             <th class="px-5 py-3 font-semibold">当前等级</th>
+            <th class="px-5 py-3 font-semibold">系统建议</th>
             <th class="px-5 py-3 font-semibold">基金经理</th>
             <th class="px-5 py-3 font-semibold">最新净值日期</th>
             <th class="px-5 py-3 font-semibold text-right">操作</th>
@@ -368,6 +410,16 @@ const sortedFunds = computed(() => {
                 {{ tierLabel(fund.current_tier) }}
               </span>
             </td>
+            <td class="px-5 py-4">
+              <span
+                v-if="fund.suggested_tier"
+                class="text-xs px-2 py-1 rounded-full border"
+                :class="tierClass(fund.suggested_tier)"
+              >
+                {{ tierLabel(fund.suggested_tier) }}
+              </span>
+              <span v-else class="text-muted">-</span>
+            </td>
             <td class="px-5 py-4">{{ fund.manager || '-' }}</td>
             <td class="px-5 py-4">{{ fund.latest_nav_date || '-' }}</td>
             <td class="px-5 py-4 text-right">
@@ -381,6 +433,14 @@ const sortedFunds = computed(() => {
                 {{ syncingId === fund.id ? '同步中...' : '同步' }}
               </button>
               <button type="button" class="text-brand hover:underline mr-3" @click="openTier(fund)">调整等级</button>
+              <button
+                v-if="fund.suggested_tier && fund.suggested_tier !== fund.current_tier"
+                type="button"
+                class="text-brand hover:underline mr-3"
+                @click="applySuggested(fund)"
+              >
+                应用建议
+              </button>
               <button type="button" class="text-up hover:underline" @click="deleteFund(fund)">删除</button>
             </td>
           </tr>

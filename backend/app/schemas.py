@@ -97,6 +97,7 @@ class AdminFundListItem(BaseModel):
     daily_return: Optional[float]
     latest_nav_date: Optional[date]
     current_tier: Optional[str] = None
+    suggested_tier: Optional[str] = None
     tags: List[TagSummary] = []
 
     class Config:
@@ -153,6 +154,20 @@ class BatchImportResponse(BaseModel):
     updated: int
     skipped: int
     errors: List[str]
+
+
+class ScoreInfo(BaseModel):
+    fund_id: UUID
+    current_tier: str
+    suggested_tier: Optional[str] = None
+    score: Optional[float] = None
+    reason: Optional[str] = None
+
+
+class ScoringRunResponse(BaseModel):
+    scored: int
+    skipped: int
+    date: str
 
 
 class TierInfo(BaseModel):

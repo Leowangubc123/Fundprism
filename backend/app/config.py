@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     TUSHARE_TOKEN: str = ""
     ALGORITHM: str = "HS256"
     CORS_ORIGINS: str = "http://localhost:5173"
+    RISK_FREE_RATE: float = 0.025
     INITIAL_ADMIN_USERNAME: str = ""
     INITIAL_ADMIN_PASSWORD: str = ""
 

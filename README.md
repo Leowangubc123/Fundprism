@@ -142,6 +142,9 @@ All admin endpoints require a user with `role=admin`.
 | GET    | `/api/admin/funds/{id}/tier` | Get current/suggested tier |
 | PUT    | `/api/admin/funds/{id}/tier` | Adjust tier (with reason, locks 30 days) |
 | POST   | `/api/admin/funds/{id}/tier/clear-lock` | Clear manual lock and resume auto tiering |
+| POST   | `/api/admin/funds/{id}/tier/apply-suggested` | Apply system-suggested tier |
+| GET    | `/api/admin/funds/{id}/score` | Get current/suggested tier with score |
+| POST   | `/api/admin/scoring/run` | Run tier scoring for all funds |
 | GET    | `/api/admin/sync-logs` | List recent sync logs |
 | POST   | `/api/admin/sync/run` | Trigger daily sync for all funds manually |
 | POST   | `/api/admin/funds/import` | Batch import funds from Excel |
@@ -237,9 +240,9 @@ After deploy, verify the backend health check at `https://<backend-domain>/healt
 ## Notes
 
 - Alembic migrations are managed under `backend/alembic/`. Run `alembic upgrade head` to apply migrations locally.
-- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, trigger per-fund NAV sync, and adjust tier ratings.
+- Admin users can manage the fund product pool at `/admin/funds`: create, edit, delete funds, lookup basic info from Tushare, trigger per-fund NAV sync, adjust tier ratings, run automatic scoring, and apply system-suggested tiers.
 - Admin users can manage tags at `/admin/tags`, user accounts at `/admin/users`, view sync logs at `/admin/sync-logs`, and batch import funds at `/admin/import`.
-- The backend runs a daily NAV sync job at the configured time when `TUSHARE_TOKEN` is set. You can also trigger a full sync manually from `/admin/sync-logs`.
+- The backend runs a daily NAV sync job at the configured time when `TUSHARE_TOKEN` is set, followed by automatic tier scoring. You can also trigger a full sync or re-run scoring manually from the admin pages.
 - The tier system supports four levels: 主推 / 备选 / 替代 / 观察. Adjustments require a reason and automatically lock the fund tier for 30 days.
 - Each fund code stores a `market` field (`OF`, `SH`, or `SZ`) so Tushare `ts_code` can be built correctly, e.g. `000001.OF`, `510300.SH`, `165509.SZ`.
 - Fund NAV and daily return values are stored per fund code in `fund_performances`.

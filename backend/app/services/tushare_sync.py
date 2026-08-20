@@ -11,6 +11,7 @@ from app.config import settings
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
 from app.models.sync import SyncLog
+from app.services.metrics import calculate_metrics_for_fund_code
 
 
 def _str(value) -> Optional[str]:
@@ -175,6 +176,8 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
 
     db.commit()
 
+    _update_fund_metrics(db, primary_code.id)
+
     total = records_created + records_updated
     sync_log.status = "success"
     sync_log.records_count = total
@@ -187,6 +190,25 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
         "records_count": total,
         "message": f"Created {records_created}, updated {records_updated} NAV records",
     }
+
+
+def _update_fund_metrics(db: Session, fund_code_id: UUID) -> None:
+    performances = (
+        db.query(FundPerformance)
+        .filter(FundPerformance.fund_code_id == fund_code_id)
+        .order_by(FundPerformance.date.asc())
+        .all()
+    )
+    if not performances:
+        return
+
+    return_1y, return_3y, sharpe, max_drawdown = calculate_metrics_for_fund_code(performances)
+    latest = performances[-1]
+    latest.return_1y = return_1y
+    latest.return_3y = return_3y
+    latest.sharpe = sharpe
+    latest.max_drawdown = max_drawdown
+    db.commit()
 
 
 def lookup_fund_basic(code: str, market: str) -> dict:
