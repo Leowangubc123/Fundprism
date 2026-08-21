@@ -6,19 +6,23 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.constants import (
+    BOND_CATEGORIES,
+    CATEGORY_ALIASES,
+    CATEGORY_SET,
+    EQUITY_CATEGORIES,
+    NON_RATED_CATEGORIES,
+    normalize_category,
+)
+from app.models.daily_tier_suggestion import DailyTierSuggestion
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
-from app.models.tier import FundCurrentTier, TIER_OPTIONS
-from app.models.daily_tier_suggestion import DailyTierSuggestion
+from app.models.tier import FundCurrentTier
+from app.services.metrics import calculate_metrics_for_fund_code
 
 TRADING_DAYS_PER_YEAR = 252
+MIN_HISTORY_DAYS = 90
 
-NON_RATED_CATEGORIES = {"被动指数", "其他"}
-
-EQUITY_CATEGORIES = {"主动权益", "指增", "QDII"}
-BOND_CATEGORIES = {"固收+", "固收"}
-
-# Weights from PRD section 7.3
 EQUITY_WEIGHTS = {
     "rank": Decimal("0.30"),
     "rank_3y": Decimal("0.10"),
@@ -37,7 +41,6 @@ BOND_WEIGHTS = {
     "scale": Decimal("0.10"),
 }
 
-# Max drawdown upper bounds by category (as positive numbers)
 MAX_DD_BOUNDS = {
     "主动权益": Decimal("0.30"),
     "指增": Decimal("0.25"),
@@ -46,7 +49,6 @@ MAX_DD_BOUNDS = {
     "固收": Decimal("0.03"),
 }
 
-# Scale fit bounds (in 亿元)
 SCALE_BOUNDS = {
     "主动权益": (Decimal("5"), Decimal("100")),
     "指增": (Decimal("3"), Decimal("50")),
@@ -64,7 +66,6 @@ def _to_float(value) -> Optional[float]:
 def _score_rank_percentile(percentile: Optional[Decimal]) -> Optional[Decimal]:
     if percentile is None:
         return None
-    # percentile is 0-1 (0 = best). Score 100*(1-percentile)
     p = max(Decimal("0"), min(Decimal("1"), percentile))
     return (Decimal("1") - p) * Decimal("100")
 
@@ -91,11 +92,6 @@ def _score_max_drawdown(max_drawdown: Optional[Decimal], category: str) -> Optio
     return (Decimal("1") - dd / bound) * Decimal("100")
 
 
-def _score_return_percentile(percentile: Optional[Decimal]) -> Optional[Decimal]:
-    # Use same logic as rank percentile: higher return = smaller percentile = better
-    return _score_rank_percentile(percentile)
-
-
 def _score_manager_tenure(tenure: Optional[Decimal]) -> Optional[Decimal]:
     if tenure is None:
         return None
@@ -111,7 +107,6 @@ def _score_scale(aum: Optional[Decimal], category: str) -> Optional[Decimal]:
         return None
     lower, upper = SCALE_BOUNDS.get(category, (Decimal("5"), Decimal("100")))
     if upper is None:
-        # Passive index: no upper bound, above lower = 100
         return Decimal("100") if aum >= lower else Decimal("0")
     if aum >= lower and aum <= upper:
         return Decimal("100")
@@ -120,10 +115,45 @@ def _score_scale(aum: Optional[Decimal], category: str) -> Optional[Decimal]:
     if aum > upper * Decimal("2"):
         return Decimal("60")
     if aum < lower:
-        # linear from 0 at lower*0.5 to 100 at lower
         return (aum - lower * Decimal("0.5")) / (lower * Decimal("0.5")) * Decimal("100")
-    # aum > upper: linear from 100 at upper to 60 at upper*2
     return (Decimal("100") - (aum - upper) / upper * Decimal("40"))
+
+
+def _annualized_return(performances: List[FundPerformance]) -> Optional[Decimal]:
+    """Annualized return from available NAV history, requiring at least MIN_HISTORY_DAYS."""
+    if len(performances) < 2:
+        return None
+    first = performances[0]
+    last = performances[-1]
+    if first.nav is None or last.nav is None or first.nav == 0:
+        return None
+    days = (last.date - first.date).days
+    if days < MIN_HISTORY_DAYS:
+        return None
+    total_return = (last.nav - first.nav) / first.nav
+    return (Decimal("1") + total_return) ** (Decimal("365") / Decimal(days)) - Decimal("1")
+
+
+def _effective_return(perf: Optional[FundPerformance], performances: List[FundPerformance]) -> Optional[Decimal]:
+    if perf is not None and perf.return_1y is not None:
+        return perf.return_1y
+    return _annualized_return(performances)
+
+
+def _fallback_sharpe(performances: List[FundPerformance]) -> Optional[Decimal]:
+    perf = performances[-1] if performances else None
+    if perf is not None and perf.sharpe is not None:
+        return perf.sharpe
+    _, _, sharpe, _ = calculate_metrics_for_fund_code(performances)
+    return sharpe
+
+
+def _fallback_max_drawdown(performances: List[FundPerformance]) -> Optional[Decimal]:
+    perf = performances[-1] if performances else None
+    if perf is not None and perf.max_drawdown is not None:
+        return perf.max_drawdown
+    _, _, _, max_dd = calculate_metrics_for_fund_code(performances)
+    return max_dd
 
 
 def _compute_category_percentiles(funds: List[Fund], metric_getter) -> Dict[UUID, Decimal]:
@@ -137,44 +167,51 @@ def _compute_category_percentiles(funds: List[Fund], metric_getter) -> Dict[UUID
 
     percentiles: Dict[UUID, Decimal] = {}
     for category, items in by_category.items():
-        # Sort descending by metric: best first
         items.sort(key=lambda x: x[1], reverse=True)
         n = len(items)
         for rank, (fund, _) in enumerate(items, start=1):
             if n == 1:
                 percentiles[fund.id] = Decimal("0")
             else:
-                # percentile 0 = rank 1, percentile 1 = rank n
                 percentiles[fund.id] = Decimal(str((rank - 1) / (n - 1)))
     return percentiles
 
 
-def _latest_performance(db: Session, fund_code_id: UUID) -> Optional[FundPerformance]:
-    return (
-        db.query(FundPerformance)
-        .filter(FundPerformance.fund_code_id == fund_code_id)
-        .order_by(FundPerformance.date.desc())
-        .first()
-    )
-
-
-def score_fund(fund: Fund, perf: FundPerformance, category_percentiles: Dict[UUID, Decimal]) -> Tuple[Optional[str], Optional[Decimal], str]:
+def score_fund(
+    fund: Fund,
+    performances: List[FundPerformance],
+    category_percentiles: Dict[UUID, Decimal],
+) -> Tuple[Optional[str], Optional[Decimal], str]:
     """Return (suggested_tier, score, reason) for a single fund."""
-    if fund.category in NON_RATED_CATEGORIES:
+    category = normalize_category(fund.category)
+    if category is None:
+        return None, None, "unknown_category"
+    if category in NON_RATED_CATEGORIES:
         return None, None, "non_rated"
 
-    establish_cutoff = (datetime.utcnow().date() - timedelta(days=180))
+    establish_cutoff = datetime.utcnow().date() - timedelta(days=180)
     if fund.establish_date and fund.establish_date > establish_cutoff:
         return None, None, "too_new"
 
-    if perf is None:
+    if not performances:
         return None, None, "no_data"
 
-    weights = EQUITY_WEIGHTS if fund.category in EQUITY_CATEGORIES else BOND_WEIGHTS
+    perf = performances[-1]
+    effective_return = _effective_return(perf, performances)
+    if effective_return is None:
+        return None, None, "insufficient_metrics"
+
+    # Require a minimum history length to avoid rating funds with just a few days of data.
+    first_date = performances[0].date
+    last_date = perf.date
+    if (last_date - first_date).days < MIN_HISTORY_DAYS:
+        return None, None, "history_too_short"
+
+    weights = EQUITY_WEIGHTS if category in EQUITY_CATEGORIES else BOND_WEIGHTS
 
     scores: Dict[str, Decimal] = {}
 
-    # Rank percentile: prefer Tushare value, fall back to within-category percentile
+    # Rank percentile: prefer Tushare value, fall back to within-category percentile on return.
     rank_percentile = perf.rank_percentile
     if rank_percentile is None and fund.id in category_percentiles:
         rank_percentile = category_percentiles[fund.id]
@@ -182,26 +219,21 @@ def score_fund(fund: Fund, perf: FundPerformance, category_percentiles: Dict[UUI
     if s_rank is not None:
         scores["rank"] = s_rank
 
-    # 3-year rank: not available in MVP; skip
-    s_rank_3y = None
-    if s_rank_3y is not None:
-        scores["rank_3y"] = s_rank_3y
-
-    s_sharpe = _score_sharpe(perf.sharpe)
+    s_sharpe = _score_sharpe(_fallback_sharpe(performances))
     if s_sharpe is not None:
         scores["sharpe"] = s_sharpe
 
-    s_dd = _score_max_drawdown(perf.max_drawdown, fund.category)
+    s_dd = _score_max_drawdown(_fallback_max_drawdown(performances), category)
     if s_dd is not None:
         scores["max_drawdown"] = s_dd
 
-    # Return 1y percentile within category
-    return_1y_percentile = category_percentiles.get(fund.id)
-    s_return = _score_return_percentile(return_1y_percentile)
+    # Return 1y percentile within category (uses annualized return as fallback).
+    return_percentile = category_percentiles.get(fund.id)
+    s_return = _score_rank_percentile(return_percentile)
     if s_return is not None:
         scores["return_1y"] = s_return
 
-    s_scale = _score_scale(perf.aum, fund.category)
+    s_scale = _score_scale(perf.aum, category)
     if s_scale is not None:
         scores["scale"] = s_scale
 
@@ -222,8 +254,6 @@ def score_fund(fund: Fund, perf: FundPerformance, category_percentiles: Dict[UUI
     if perf.aum is not None and perf.aum < Decimal("0.5"):
         return "观察", composite, "red_line_aum"
 
-    # Determine tier by score percentile within category
-    # For simplicity use absolute composite thresholds
     if composite >= Decimal("80"):
         tier = "主推"
     elif composite >= Decimal("65"):
@@ -245,9 +275,10 @@ def run_scoring(db: Session, fund_id: Optional[UUID] = None) -> Dict:
         query = query.filter(Fund.id == fund_id)
     funds = query.all()
 
-    # Pre-compute within-category percentiles based on return_1y
-    perf_by_fund: Dict[UUID, FundPerformance] = {}
-    return_1y_by_fund: Dict[UUID, Decimal] = {}
+    # Pre-fetch primary codes and full performance history per fund.
+    performances_by_fund: Dict[UUID, List[FundPerformance]] = {}
+    effective_return_by_fund: Dict[UUID, Decimal] = {}
+
     for fund in funds:
         primary_code = (
             db.query(FundCode)
@@ -256,22 +287,28 @@ def run_scoring(db: Session, fund_id: Optional[UUID] = None) -> Dict:
         )
         if not primary_code:
             continue
-        perf = _latest_performance(db, primary_code.id)
-        if perf:
-            perf_by_fund[fund.id] = perf
-            if perf.return_1y is not None:
-                return_1y_by_fund[fund.id] = perf.return_1y
+        performances = (
+            db.query(FundPerformance)
+            .filter(FundPerformance.fund_code_id == primary_code.id)
+            .order_by(FundPerformance.date.asc())
+            .all()
+        )
+        if performances:
+            performances_by_fund[fund.id] = performances
+            effective_return = _effective_return(performances[-1], performances)
+            if effective_return is not None:
+                effective_return_by_fund[fund.id] = effective_return
 
     category_percentiles = _compute_category_percentiles(
-        [f for f in funds if f.id in return_1y_by_fund],
-        lambda f: return_1y_by_fund.get(f.id),
+        [f for f in funds if f.id in effective_return_by_fund],
+        lambda f: effective_return_by_fund.get(f.id),
     )
 
     scored = 0
     skipped = 0
     for fund in funds:
-        perf = perf_by_fund.get(fund.id)
-        suggested_tier, score, reason = score_fund(fund, perf, category_percentiles)
+        performances = performances_by_fund.get(fund.id, [])
+        suggested_tier, score, reason = score_fund(fund, performances, category_percentiles)
 
         tier = db.query(FundCurrentTier).filter(FundCurrentTier.fund_id == fund.id).first()
         if not tier:
@@ -286,14 +323,14 @@ def run_scoring(db: Session, fund_id: Optional[UUID] = None) -> Dict:
         else:
             skipped += 1
 
-        # Upsert daily suggestion
         existing = (
             db.query(DailyTierSuggestion)
             .filter(DailyTierSuggestion.fund_id == fund.id, DailyTierSuggestion.date == today)
             .first()
         )
+        suggestion_tier = suggested_tier or tier.current_tier or "观察"
         if existing:
-            existing.suggested_tier = suggested_tier or tier.current_tier
+            existing.suggested_tier = suggestion_tier
             existing.score = score
             existing.reason = reason
         else:
@@ -301,7 +338,7 @@ def run_scoring(db: Session, fund_id: Optional[UUID] = None) -> Dict:
                 DailyTierSuggestion(
                     fund_id=fund.id,
                     date=today,
-                    suggested_tier=suggested_tier or tier.current_tier,
+                    suggested_tier=suggestion_tier,
                     score=score,
                     reason=reason,
                 )

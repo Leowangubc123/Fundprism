@@ -21,7 +21,7 @@ def test_create_fund(client, admin_headers, db):
         "name": "测试基金",
         "code": "123456",
         "market": "OF",
-        "category": "混合型",
+        "category": "主动权益",
         "risk_level": "中",
         "manager": "测试经理",
     }
@@ -43,7 +43,7 @@ def test_create_fund(client, admin_headers, db):
 
 
 def test_create_fund_duplicate_code(client, admin_headers, db):
-    fund = Fund(name="已有基金", category="股票型", risk_level="高")
+    fund = Fund(name="已有基金", category="主动权益", risk_level="高")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000001", market="OF", is_primary=True))
@@ -53,7 +53,7 @@ def test_create_fund_duplicate_code(client, admin_headers, db):
         "name": "重复代码基金",
         "code": "000001",
         "market": "OF",
-        "category": "混合型",
+        "category": "主动权益",
         "risk_level": "中",
     }
     response = client.post("/api/admin/funds", json=payload, headers=admin_headers)
@@ -61,7 +61,7 @@ def test_create_fund_duplicate_code(client, admin_headers, db):
 
 
 def test_update_fund(client, admin_headers, db):
-    fund = Fund(name="旧名字", category="混合型", risk_level="中")
+    fund = Fund(name="旧名字", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000002", market="OF", is_primary=True))
@@ -77,7 +77,7 @@ def test_update_fund(client, admin_headers, db):
 
 
 def test_delete_fund(client, admin_headers, db):
-    fund = Fund(name="待删除", category="混合型", risk_level="中")
+    fund = Fund(name="待删除", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000003", market="OF", is_primary=True))
@@ -89,7 +89,7 @@ def test_delete_fund(client, admin_headers, db):
 
 
 def test_sync_fund_creates_performances(client, admin_headers, db, monkeypatch):
-    fund = Fund(name="同步基金", category="混合型", risk_level="中")
+    fund = Fund(name="同步基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000004", market="OF", is_primary=True))
@@ -123,7 +123,7 @@ def test_sync_fund_creates_performances(client, admin_headers, db, monkeypatch):
 
 
 def test_sync_fund_requires_token(client, admin_headers, db):
-    fund = Fund(name="无Token基金", category="混合型", risk_level="中")
+    fund = Fund(name="无Token基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000005", market="OF", is_primary=True))
@@ -140,7 +140,7 @@ def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
         "ts_code": ["000006.OF"],
         "name": ["测试基金"],
         "management": ["测试经理"],
-        "fund_type": ["混合型"],
+        "fund_type": ["主动权益"],
         "found_date": ["20200101"],
         "market": ["OF"],
     })
@@ -155,7 +155,7 @@ def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
     data = response.json()
     assert data["name"] == "测试基金"
     assert data["manager"] == "测试经理"
-    assert data["category"] == "混合型"
+    assert data["category"] == "主动权益"
     assert data["market"] == "OF"
 
 
@@ -165,7 +165,7 @@ def test_lookup_fund_requires_admin(client, auth_headers):
 
 
 def test_get_fund_tier_creates_default(client, admin_headers, db):
-    fund = Fund(name="等级基金", category="混合型", risk_level="中")
+    fund = Fund(name="等级基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000007", market="OF", is_primary=True))
@@ -178,7 +178,7 @@ def test_get_fund_tier_creates_default(client, admin_headers, db):
 
 
 def test_update_fund_tier(client, admin_headers, db, admin_user):
-    fund = Fund(name="调整等级基金", category="混合型", risk_level="中")
+    fund = Fund(name="调整等级基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000008", market="OF", is_primary=True))
@@ -203,7 +203,7 @@ def test_update_fund_tier(client, admin_headers, db, admin_user):
 
 
 def test_clear_fund_tier_lock(client, admin_headers, db, admin_user):
-    fund = Fund(name="恢复自动评级基金", category="混合型", risk_level="中")
+    fund = Fund(name="恢复自动评级基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.flush()
     db.add(FundCode(fund_id=fund.id, code="000009", market="OF", is_primary=True))

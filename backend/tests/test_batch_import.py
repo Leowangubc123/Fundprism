@@ -37,9 +37,9 @@ def test_batch_import_requires_admin(client, auth_headers):
 
 def test_batch_import_create_and_update(client, admin_headers, db):
     rows = [
-        ["123456", "OF", "新基金", "混合型", "中", "张三", "2020-01-01", "理由1", "客户1", "红利主题"],
-        ["123456", "OF", "更新基金", "股票型", "高", "李四", "", "", "", "量化策略"],
-        ["abc", "OF", "无效代码", "混合型", "中", "", "", "", "", ""],
+        ["123456", "OF", "新基金", "主动权益", "中", "张三", "2020-01-01", "理由1", "客户1", "红利主题"],
+        ["123456", "OF", "更新基金", "主动权益", "高", "李四", "", "", "", "量化策略"],
+        ["abc", "OF", "无效代码", "主动权益", "中", "", "", "", "", ""],
     ]
     files = {"file": ("test.xlsx", BytesIO(_make_xlsx(rows)), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
 
@@ -53,7 +53,7 @@ def test_batch_import_create_and_update(client, admin_headers, db):
 
     fund = db.query(Fund).filter(Fund.name == "更新基金").first()
     assert fund is not None
-    assert fund.category == "股票型"
+    assert fund.category == "主动权益"
     assert fund.risk_level == "高"
 
     code = db.query(FundCode).filter(FundCode.code == "123456").first()

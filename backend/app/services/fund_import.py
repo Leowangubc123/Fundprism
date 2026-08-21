@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.constants import CATEGORY_SET, normalize_category
 from app.models.fund import Fund, FundCode
 from app.models.tag import FundTag, Tag
 from app.models.tier import FundCurrentTier
@@ -151,6 +152,13 @@ def import_funds_from_excel(db: Session, content: bytes) -> Dict:
         target_clients = _to_str(row[target_idx]) if target_idx is not None else None
         tags = _parse_tags(row[tags_idx]) if tags_idx is not None else []
 
+        # Validate user-provided category against the allowed PRD category set.
+        user_category = normalize_category(category) if category else None
+        if category and user_category is None:
+            errors.append(f"第 {row_idx} 行 {code} 的分类“{category}”不在系统分类中")
+            skipped_count += 1
+            continue
+
         # Try to fill missing basic info from Tushare
         if not name or not manager or not category or not establish_date:
             basic = _lookup_basic(code, market)
@@ -159,6 +167,11 @@ def import_funds_from_excel(db: Session, content: bytes) -> Dict:
                 manager = manager or basic.get("management")
                 category = category or basic.get("fund_type")
                 establish_date = establish_date or basic.get("found_date")
+
+        # Normalize final category; fall back to "其他" for unrecognized Tushare types.
+        category = normalize_category(category)
+        if category is None:
+            category = "其他"
 
         if not name or not category or not risk_level:
             errors.append(f"第 {row_idx} 行 {code} 缺少必填字段（名称、分类、风险等级）")

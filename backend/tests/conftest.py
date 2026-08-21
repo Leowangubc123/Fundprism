@@ -73,8 +73,8 @@ def admin_headers(admin_user):
 
 @pytest.fixture(scope="function")
 def sample_funds(db):
-    fund_a = Fund(name="基金 A", category="混合型", risk_level="中", manager="张三")
-    fund_b = Fund(name="基金 B", category="股票型", risk_level="高", manager="李四")
+    fund_a = Fund(name="基金 A", category="主动权益", risk_level="中", manager="张三")
+    fund_b = Fund(name="基金 B", category="主动权益", risk_level="高", manager="李四")
     db.add_all([fund_a, fund_b])
     db.commit()
     db.refresh(fund_a)

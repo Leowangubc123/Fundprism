@@ -26,6 +26,16 @@ const marketOptions = [
   { value: 'SZ', label: '深圳（SZ）' },
 ]
 
+const categoryOptions = [
+  { value: '主动权益', label: '主动权益' },
+  { value: '指增', label: '指增' },
+  { value: '被动指数', label: '被动指数' },
+  { value: '固收+', label: '固收+' },
+  { value: '固收', label: '固收' },
+  { value: 'QDII', label: 'QDII' },
+  { value: '其他', label: '其他' },
+]
+
 const tierOptions = [
   { value: '主推', label: '主推', class: 'bg-green-100 text-green-700 border-green-200' },
   { value: '备选', label: '备选', class: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -195,8 +205,8 @@ function validateForm() {
     formErrors.code = '基金代码必须为 6 位数字'
     ok = false
   }
-  if (!form.category.trim()) {
-    formErrors.category = '请输入分类'
+  if (!form.category) {
+    formErrors.category = '请选择分类'
     ok = false
   }
   if (!form.risk_level.trim()) {
@@ -419,6 +429,7 @@ const sortedFunds = computed(() => {
                 {{ tierLabel(fund.suggested_tier) }}
               </span>
               <span v-else class="text-muted">-</span>
+              <div v-if="fund.scoring_reason" class="text-xs text-muted mt-1">{{ fund.scoring_reason }}</div>
             </td>
             <td class="px-5 py-4">{{ fund.manager || '-' }}</td>
             <td class="px-5 py-4">{{ fund.latest_nav_date || '-' }}</td>
@@ -494,7 +505,10 @@ const sortedFunds = computed(() => {
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium mb-1">分类 *</label>
-              <input v-model="form.category" type="text" class="input w-full" placeholder="例如：混合型" />
+              <select v-model="form.category" class="input w-full">
+                <option value="" disabled>请选择分类</option>
+                <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
               <p v-if="formErrors.category" class="text-up text-xs mt-1">{{ formErrors.category }}</p>
             </div>
             <div>

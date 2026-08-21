@@ -1,9 +1,12 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+FundCategory = Literal["主动权益", "指增", "被动指数", "固收+", "固收", "QDII", "其他"]
 
 
 class Market(str, Enum):
@@ -65,7 +68,7 @@ class FundCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
     market: Market = Market.OF
-    category: str = Field(..., min_length=1, max_length=32)
+    category: FundCategory
     risk_level: str = Field(..., min_length=1, max_length=8)
     manager: Optional[str] = Field(None, max_length=64)
     establish_date: Optional[date] = None
@@ -76,7 +79,7 @@ class FundCreateRequest(BaseModel):
 
 class FundUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=128)
-    category: Optional[str] = Field(None, min_length=1, max_length=32)
+    category: Optional[FundCategory] = None
     risk_level: Optional[str] = Field(None, min_length=1, max_length=8)
     manager: Optional[str] = Field(None, max_length=64)
     establish_date: Optional[date] = None
@@ -98,6 +101,7 @@ class AdminFundListItem(BaseModel):
     latest_nav_date: Optional[date]
     current_tier: Optional[str] = None
     suggested_tier: Optional[str] = None
+    scoring_reason: Optional[str] = None
     tags: List[TagSummary] = []
 
     class Config:

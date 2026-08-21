@@ -8,7 +8,7 @@ def test_list_sync_logs_requires_admin(client, auth_headers):
 
 
 def test_list_sync_logs(client, admin_headers, db):
-    fund = Fund(name="日志基金", category="混合型", risk_level="中")
+    fund = Fund(name="日志基金", category="主动权益", risk_level="中")
     db.add(fund)
     db.commit()
 

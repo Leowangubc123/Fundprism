@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.constants import normalize_category
 from app.database import get_db
 from app.models.daily_tier_suggestion import DailyTierSuggestion
 from app.models.fund import Fund, FundCode
@@ -75,7 +76,7 @@ def _apply_tag_ids(db: Session, fund: Fund, tag_ids: Optional[List[UUID]]) -> No
             db.add(FundTag(fund_id=fund.id, tag_id=tag_id))
 
 
-def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance], latest_date, tags: List[TagSummary]) -> AdminFundListItem:
+def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance], latest_date, tags: List[TagSummary], scoring_reason: Optional[str] = None) -> AdminFundListItem:
     return AdminFundListItem(
         id=fund.id,
         name=fund.name,
@@ -89,6 +90,7 @@ def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance
         latest_nav_date=latest_date,
         current_tier=fund.tier.current_tier if fund.tier else None,
         suggested_tier=fund.tier.suggested_tier if fund.tier else None,
+        scoring_reason=scoring_reason,
         tags=tags,
     )
 
@@ -124,8 +126,21 @@ def list_funds(
         .all()
     )
 
+    fund_ids = [str(fund.id) for fund, _, _, _ in results]
+    latest_reasons: dict = {}
+    if fund_ids:
+        suggestions = (
+            db.query(DailyTierSuggestion.fund_id, DailyTierSuggestion.reason, DailyTierSuggestion.date)
+            .filter(DailyTierSuggestion.fund_id.in_(fund_ids))
+            .order_by(DailyTierSuggestion.fund_id, DailyTierSuggestion.date.desc())
+            .all()
+        )
+        for suggestion in suggestions:
+            if suggestion.fund_id not in latest_reasons:
+                latest_reasons[suggestion.fund_id] = suggestion.reason
+
     return [
-        _build_admin_item(fund, code, perf, latest_date, _tag_summaries(db, fund.id))
+        _build_admin_item(fund, code, perf, latest_date, _tag_summaries(db, fund.id), latest_reasons.get(fund.id))
         for fund, code, perf, latest_date in results
     ]
 
@@ -184,7 +199,7 @@ def lookup_fund(
         ts_code=result.get("ts_code") or f"{code}.{market.value}",
         name=result.get("name") or "",
         manager=result.get("management"),
-        category=result.get("fund_type"),
+        category=normalize_category(result.get("fund_type")) or result.get("fund_type"),
         establish_date=result.get("found_date"),
         market=market.value,
     )
@@ -212,12 +227,21 @@ def get_fund(
         .first()
     ) if code else None
 
+    latest_reason = (
+        db.query(DailyTierSuggestion.reason)
+        .filter(DailyTierSuggestion.fund_id == fund_id)
+        .order_by(DailyTierSuggestion.date.desc())
+        .first()
+    )
+    scoring_reason = latest_reason[0] if latest_reason else None
+
     return _build_admin_item(
         fund,
         code,
         latest_perf,
         latest_perf.date if latest_perf else None,
         _tag_summaries(db, fund.id),
+        scoring_reason,
     )
 
 
@@ -255,12 +279,21 @@ def update_fund(
         .first()
     ) if code else None
 
+    latest_reason = (
+        db.query(DailyTierSuggestion.reason)
+        .filter(DailyTierSuggestion.fund_id == fund_id)
+        .order_by(DailyTierSuggestion.date.desc())
+        .first()
+    )
+    scoring_reason = latest_reason[0] if latest_reason else None
+
     return _build_admin_item(
         fund,
         code,
         latest_perf,
         latest_perf.date if latest_perf else None,
         _tag_summaries(db, fund.id),
+        scoring_reason,
     )
 
 
