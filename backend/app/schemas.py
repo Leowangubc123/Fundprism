@@ -71,6 +71,8 @@ class FundCreateRequest(BaseModel):
     category: FundCategory
     risk_level: str = Field(..., min_length=1, max_length=8)
     manager: Optional[str] = Field(None, max_length=64)
+    manager_start_date: Optional[date] = None
+    is_abnormal: bool = False
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
@@ -82,6 +84,8 @@ class FundUpdateRequest(BaseModel):
     category: Optional[FundCategory] = None
     risk_level: Optional[str] = Field(None, min_length=1, max_length=8)
     manager: Optional[str] = Field(None, max_length=64)
+    manager_start_date: Optional[date] = None
+    is_abnormal: Optional[bool] = None
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
@@ -96,12 +100,15 @@ class AdminFundListItem(BaseModel):
     category: str
     risk_level: str
     manager: Optional[str]
+    manager_start_date: Optional[date] = None
+    is_abnormal: bool = False
     nav: Optional[float]
     daily_return: Optional[float]
     latest_nav_date: Optional[date]
     current_tier: Optional[str] = None
     suggested_tier: Optional[str] = None
     scoring_reason: Optional[str] = None
+    manual_lock_until: Optional[date] = None
     tags: List[TagSummary] = []
 
     class Config:
@@ -174,6 +181,12 @@ class ScoringRunResponse(BaseModel):
     date: str
 
 
+class StableApplyResponse(BaseModel):
+    applied: int
+    red_line_downgrades: int
+    locked_skipped: int
+
+
 class TierInfo(BaseModel):
     fund_id: UUID
     current_tier: str
@@ -183,6 +196,7 @@ class TierInfo(BaseModel):
     adjusted_by: Optional[str] = None
     adjusted_reason: Optional[str] = None
     manual_lock_until: Optional[date] = None
+    is_locked: bool = False
 
     class Config:
         from_attributes = True

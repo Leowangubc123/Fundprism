@@ -10,6 +10,7 @@ from app.database import SessionLocal
 from app.models.fund import Fund
 from app.models.sync import SyncLog
 from app.services.scoring import run_scoring
+from app.services.tier_stability import apply_stable_tier_changes
 from app.services.tushare_sync import sync_fund_nav
 
 
@@ -62,13 +63,20 @@ def run_daily_sync() -> dict:
         db.commit()
 
         scoring_summary = run_scoring(db)
+        stable_summary = apply_stable_tier_changes(db)
 
         return {
             "status": batch_log.status,
             "total": total,
             "successful": successful,
             "failed": failed,
-            "message": f"Synced {successful}/{total} funds" + (f", {failed} failed" if failed else "") + f"; scored {scoring_summary['scored']} funds",
+            "message": (
+                f"Synced {successful}/{total} funds"
+                + (f", {failed} failed" if failed else "")
+                + f"; scored {scoring_summary['scored']} funds"
+                + f"; applied {stable_summary['applied']} tier changes"
+                + f", red-line downgrades {stable_summary['red_line_downgrades']}"
+            ),
         }
     finally:
         db.close()

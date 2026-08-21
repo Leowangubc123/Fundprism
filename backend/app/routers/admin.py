@@ -25,6 +25,7 @@ from app.schemas import (
     Market,
     ScoreInfo,
     ScoringRunResponse,
+    StableApplyResponse,
     SyncLogItem,
     SyncResponse,
     SyncRunResponse,
@@ -36,6 +37,7 @@ from app.security import get_current_admin
 from app.services.fund_import import import_funds_from_excel
 from app.services.scheduler import run_daily_sync
 from app.services.scoring import run_scoring
+from app.services.tier_stability import apply_stable_tier_changes
 from app.services.tushare_sync import lookup_fund_basic, sync_fund_nav
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -85,12 +87,15 @@ def _build_admin_item(fund: Fund, code: FundCode, perf: Optional[FundPerformance
         category=fund.category,
         risk_level=fund.risk_level,
         manager=fund.manager,
+        manager_start_date=fund.manager_start_date,
+        is_abnormal=fund.is_abnormal,
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
         latest_nav_date=latest_date,
         current_tier=fund.tier.current_tier if fund.tier else None,
         suggested_tier=fund.tier.suggested_tier if fund.tier else None,
         scoring_reason=scoring_reason,
+        manual_lock_until=fund.tier.manual_lock_until if fund.tier else None,
         tags=tags,
     )
 
@@ -160,6 +165,8 @@ def create_fund(
         category=payload.category,
         risk_level=payload.risk_level,
         manager=payload.manager,
+        manager_start_date=payload.manager_start_date,
+        is_abnormal=payload.is_abnormal,
         establish_date=payload.establish_date,
         reason=payload.reason,
         target_clients=payload.target_clients,
@@ -323,6 +330,7 @@ def sync_fund(
 
 
 def _tier_info(tier: FundCurrentTier) -> TierInfo:
+    is_locked = bool(tier.manual_lock_until and tier.manual_lock_until >= date.today())
     return TierInfo(
         fund_id=tier.fund_id,
         current_tier=tier.current_tier,
@@ -332,6 +340,7 @@ def _tier_info(tier: FundCurrentTier) -> TierInfo:
         adjusted_by=tier.adjusted_by.username if tier.adjusted_by else None,
         adjusted_reason=tier.adjusted_reason,
         manual_lock_until=tier.manual_lock_until,
+        is_locked=is_locked,
     )
 
 
@@ -543,6 +552,15 @@ def run_scoring_all(
 ):
     summary = run_scoring(db)
     return ScoringRunResponse(**summary)
+
+
+@router.post("/tiers/apply-stable", response_model=StableApplyResponse)
+def apply_stable_tiers(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    summary = apply_stable_tier_changes(db)
+    return StableApplyResponse(**summary)
 
 
 @router.post("/funds/{fund_id}/tier/apply-suggested", response_model=TierInfo)

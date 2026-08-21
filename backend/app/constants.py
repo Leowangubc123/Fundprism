@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional
 
 CATEGORY_OPTIONS = [
@@ -40,6 +41,18 @@ CATEGORY_ALIASES = {
     "REITs": "其他",
     "短期理财": "其他",
 }
+
+# Red-line thresholds (PRD §7.6.4)
+RED_LINE_MAX_DD = {
+    "主动权益": Decimal("0.30"),
+    "指增": Decimal("0.30"),
+    "QDII": Decimal("0.30"),
+    "固收+": Decimal("0.05"),
+    "固收": Decimal("0.05"),
+}
+RED_LINE_AUM = Decimal("0.5")  # 亿元
+RED_LINE_RANK_PERCENTILE = Decimal("0.80")
+RED_LINE_MANAGER_DAYS = 30
 
 
 def normalize_category(value: Optional[str]) -> Optional[str]:

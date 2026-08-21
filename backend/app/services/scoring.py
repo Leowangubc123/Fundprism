@@ -12,6 +12,10 @@ from app.constants import (
     CATEGORY_SET,
     EQUITY_CATEGORIES,
     NON_RATED_CATEGORIES,
+    RED_LINE_AUM,
+    RED_LINE_MANAGER_DAYS,
+    RED_LINE_MAX_DD,
+    RED_LINE_RANK_PERCENTILE,
     normalize_category,
 )
 from app.models.daily_tier_suggestion import DailyTierSuggestion
@@ -250,9 +254,27 @@ def score_fund(
 
     composite = sum(scores[key] * weights[key] for key in scores) / total_weight
 
-    # Red line: AUM below 0.5亿 -> 观察
-    if perf.aum is not None and perf.aum < Decimal("0.5"):
+    # Red line checks (PRD §7.6.4): any triggers -> 观察
+    if perf.aum is not None and perf.aum < RED_LINE_AUM:
         return "观察", composite, "red_line_aum"
+
+    max_dd = _fallback_max_drawdown(performances)
+    dd_threshold = RED_LINE_MAX_DD.get(category)
+    if max_dd is not None and dd_threshold is not None and abs(max_dd) > dd_threshold:
+        return "观察", composite, "red_line_drawdown"
+
+    rank_percentile = perf.rank_percentile
+    if rank_percentile is not None and rank_percentile > RED_LINE_RANK_PERCENTILE:
+        return "观察", composite, "red_line_rank"
+
+    if (
+        fund.manager_start_date
+        and (datetime.utcnow().date() - fund.manager_start_date).days <= RED_LINE_MANAGER_DAYS
+    ):
+        return "观察", composite, "red_line_manager"
+
+    if fund.is_abnormal:
+        return "观察", composite, "red_line_abnormal"
 
     if composite >= Decimal("80"):
         tier = "主推"

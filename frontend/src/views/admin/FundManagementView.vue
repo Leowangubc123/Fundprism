@@ -54,6 +54,8 @@ const emptyForm = {
   category: '',
   risk_level: '',
   manager: '',
+  manager_start_date: '',
+  is_abnormal: false,
   establish_date: '',
   reason: '',
   target_clients: '',
@@ -85,6 +87,8 @@ function openEdit(fund) {
     category: fund.category,
     risk_level: fund.risk_level,
     manager: fund.manager || '',
+    manager_start_date: fund.manager_start_date || '',
+    is_abnormal: !!fund.is_abnormal,
     establish_date: fund.establish_date || '',
     reason: fund.reason || '',
     target_clients: fund.target_clients || '',
@@ -413,12 +417,27 @@ const sortedFunds = computed(() => {
             <td class="px-5 py-4">{{ fund.category }}</td>
             <td class="px-5 py-4">{{ fund.risk_level }}</td>
             <td class="px-5 py-4">
-              <span
-                class="text-xs px-2 py-1 rounded-full border"
-                :class="tierClass(fund.current_tier)"
-              >
-                {{ tierLabel(fund.current_tier) }}
-              </span>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span
+                  class="text-xs px-2 py-1 rounded-full border"
+                  :class="tierClass(fund.current_tier)"
+                >
+                  {{ tierLabel(fund.current_tier) }}
+                </span>
+                <span
+                  v-if="fund.manual_lock_until && new Date(fund.manual_lock_until) >= new Date().setHours(0,0,0,0)"
+                  class="text-xs text-amber-600"
+                  title="锁定至 {{ fund.manual_lock_until }}"
+                >
+                  🔒 {{ fund.manual_lock_until }}
+                </span>
+                <span
+                  v-if="fund.is_abnormal || (fund.scoring_reason && fund.scoring_reason.startsWith('red_line_'))"
+                  class="text-xs text-red-600"
+                >
+                  ⚠ 红线
+                </span>
+              </div>
             </td>
             <td class="px-5 py-4">
               <span
@@ -521,6 +540,19 @@ const sortedFunds = computed(() => {
           <div>
             <label class="block text-sm font-medium mb-1">基金经理</label>
             <input v-model="form.manager" type="text" class="input w-full" placeholder="可选" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">基金经理任职开始日期</label>
+              <input v-model="form.manager_start_date" type="date" class="input w-full" />
+            </div>
+            <div class="flex items-center">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input v-model="form.is_abnormal" type="checkbox" class="w-4 h-4" />
+                <span class="text-sm font-medium">异常状态（暂停申购/监管处罚等）</span>
+              </label>
+            </div>
           </div>
 
           <div>

@@ -17,6 +17,8 @@ class Fund(Base):
     risk_level = Column(String(8), nullable=False)
     manager = Column(String(64), nullable=True)
     manager_tenure = Column(String(16), nullable=True)
+    manager_start_date = Column(Date, nullable=True)
+    is_abnormal = Column(Boolean, default=False, nullable=False)
     establish_date = Column(Date, nullable=True)
     reason = Column(String(2000), nullable=True)
     target_clients = Column(String(500), nullable=True)
