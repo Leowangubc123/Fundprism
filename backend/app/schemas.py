@@ -76,6 +76,10 @@ class FundCreateRequest(BaseModel):
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
+    asset_stock_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_bond_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_cash_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_other_pct: Optional[float] = Field(None, ge=0, le=100)
     tag_ids: Optional[List[UUID]] = Field(default_factory=list)
 
 
@@ -89,6 +93,10 @@ class FundUpdateRequest(BaseModel):
     establish_date: Optional[date] = None
     reason: Optional[str] = Field(None, max_length=2000)
     target_clients: Optional[str] = Field(None, max_length=500)
+    asset_stock_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_bond_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_cash_pct: Optional[float] = Field(None, ge=0, le=100)
+    asset_other_pct: Optional[float] = Field(None, ge=0, le=100)
     tag_ids: Optional[List[UUID]] = None
 
 
@@ -230,14 +238,63 @@ class FundListItem(BaseModel):
         from_attributes = True
 
 
+class FundCodeItem(BaseModel):
+    id: UUID
+    code: str
+    market: str
+    is_primary: bool
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialItem(BaseModel):
+    id: UUID
+    name: str
+    material_type: str
+    url: str
+    size: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=128)
+    material_type: str = Field(..., min_length=1, max_length=32)
+    url: str = Field(..., min_length=1, max_length=500)
+    size: Optional[str] = Field(None, max_length=32)
+
+
+class MaterialDownloadResponse(BaseModel):
+    download_url: str
+
+
 class FundDetail(BaseModel):
     id: UUID
     name: str
     code: str
+    codes: List[FundCodeItem] = []
     category: str
-    nav: Optional[float]
-    daily_return: Optional[float]
+    risk_level: Optional[str] = None
+    manager: Optional[str] = None
+    manager_start_date: Optional[date] = None
+    establish_date: Optional[date] = None
+    nav: Optional[float] = None
+    daily_return: Optional[float] = None
+    return_1y: Optional[float] = None
+    return_3y: Optional[float] = None
+    sharpe: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    aum: Optional[float] = None
+    rank_percentile: Optional[float] = None
     current_tier: Optional[str] = None
+    reason: Optional[str] = None
+    target_clients: Optional[str] = None
+    asset_stock_pct: Optional[float] = None
+    asset_bond_pct: Optional[float] = None
+    asset_cash_pct: Optional[float] = None
+    asset_other_pct: Optional[float] = None
     tags: List[TagSummary] = []
 
     class Config:

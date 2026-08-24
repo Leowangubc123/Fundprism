@@ -59,15 +59,32 @@ const emptyForm = {
   establish_date: '',
   reason: '',
   target_clients: '',
+  asset_stock_pct: '',
+  asset_bond_pct: '',
+  asset_cash_pct: '',
+  asset_other_pct: '',
   tag_ids: [],
+}
+
+const emptyMaterialForm = {
+  name: '',
+  material_type: '',
+  url: '',
+  size: '',
 }
 
 const form = reactive({ ...emptyForm })
 const formErrors = reactive({})
+const materials = ref([])
+const materialForm = reactive({ ...emptyMaterialForm })
+const materialFormErrors = reactive({})
 
 function resetForm() {
   Object.assign(form, emptyForm)
   Object.keys(formErrors).forEach((k) => delete formErrors[k])
+  Object.assign(materialForm, emptyMaterialForm)
+  Object.keys(materialFormErrors).forEach((k) => delete materialFormErrors[k])
+  materials.value = []
 }
 
 function openCreate() {
@@ -77,7 +94,7 @@ function openCreate() {
   showModal.value = true
 }
 
-function openEdit(fund) {
+async function openEdit(fund) {
   isEditing.value = true
   editingFundId.value = fund.id
   Object.assign(form, {
@@ -92,14 +109,22 @@ function openEdit(fund) {
     establish_date: fund.establish_date || '',
     reason: fund.reason || '',
     target_clients: fund.target_clients || '',
+    asset_stock_pct: fund.asset_stock_pct ?? '',
+    asset_bond_pct: fund.asset_bond_pct ?? '',
+    asset_cash_pct: fund.asset_cash_pct ?? '',
+    asset_other_pct: fund.asset_other_pct ?? '',
     tag_ids: fund.tags?.map((t) => t.id) || [],
   })
   Object.keys(formErrors).forEach((k) => delete formErrors[k])
+  Object.assign(materialForm, emptyMaterialForm)
+  Object.keys(materialFormErrors).forEach((k) => delete materialFormErrors[k])
   showModal.value = true
+  await fetchMaterials(fund.id)
 }
 
 function closeModal() {
   showModal.value = false
+  resetForm()
 }
 
 function openTier(fund) {
@@ -218,6 +243,18 @@ function validateForm() {
     ok = false
   }
 
+  const assetFields = ['asset_stock_pct', 'asset_bond_pct', 'asset_cash_pct', 'asset_other_pct']
+  for (const key of assetFields) {
+    const value = form[key]
+    if (value !== '' && value != null) {
+      const num = Number(value)
+      if (Number.isNaN(num) || num < 0 || num > 100) {
+        formErrors[key] = '请输入 0–100 之间的数字'
+        ok = false
+      }
+    }
+  }
+
   return ok
 }
 
@@ -229,6 +266,17 @@ async function submitForm() {
 
   const payload = { ...form }
   if (!payload.establish_date) delete payload.establish_date
+  if (!payload.manager_start_date) delete payload.manager_start_date
+
+  const assetFields = ['asset_stock_pct', 'asset_bond_pct', 'asset_cash_pct', 'asset_other_pct']
+  for (const key of assetFields) {
+    const value = payload[key]
+    if (value === '' || value == null) {
+      payload[key] = null
+    } else {
+      payload[key] = Number(value)
+    }
+  }
 
   try {
     if (isEditing.value) {
@@ -252,6 +300,80 @@ async function submitForm() {
     await fetchFunds()
   } catch (e) {
     error.value = e.message || '操作失败'
+  }
+}
+
+async function fetchMaterials(fundId) {
+  try {
+    const res = await fetchApi(`/api/admin/funds/${fundId}/materials`)
+    if (!res.ok) throw new Error('加载物料失败')
+    materials.value = await res.json()
+  } catch (e) {
+    console.error(e)
+    materials.value = []
+  }
+}
+
+function validateMaterialForm() {
+  Object.keys(materialFormErrors).forEach((k) => delete materialFormErrors[k])
+  let ok = true
+  if (!materialForm.name.trim()) {
+    materialFormErrors.name = '请输入物料名称'
+    ok = false
+  }
+  if (!materialForm.material_type.trim()) {
+    materialFormErrors.material_type = '请输入物料类型'
+    ok = false
+  }
+  if (!materialForm.url.trim()) {
+    materialFormErrors.url = '请输入外链地址'
+    ok = false
+  } else if (!/^https?:\/\//i.test(materialForm.url.trim())) {
+    materialFormErrors.url = '请输入以 http:// 或 https:// 开头的链接'
+    ok = false
+  }
+  return ok
+}
+
+async function submitMaterial() {
+  if (!validateMaterialForm()) return
+  if (!isEditing.value || !editingFundId.value) return
+
+  error.value = ''
+  message.value = ''
+
+  try {
+    const res = await fetchApi(`/api/admin/funds/${editingFundId.value}/materials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: materialForm.name.trim(),
+        material_type: materialForm.material_type.trim(),
+        url: materialForm.url.trim(),
+        size: materialForm.size.trim() || undefined,
+      }),
+    })
+    if (!res.ok) throw new Error('添加物料失败')
+    Object.assign(materialForm, emptyMaterialForm)
+    Object.keys(materialFormErrors).forEach((k) => delete materialFormErrors[k])
+    message.value = '营销物料已添加'
+    await fetchMaterials(editingFundId.value)
+  } catch (e) {
+    error.value = e.message || '添加物料失败'
+  }
+}
+
+async function deleteMaterial(material) {
+  if (!confirm(`确定删除物料“${material.name}”吗？`)) return
+  try {
+    const res = await fetchApi(`/api/admin/funds/${editingFundId.value}/materials/${material.id}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error('删除物料失败')
+    message.value = '物料已删除'
+    await fetchMaterials(editingFundId.value)
+  } catch (e) {
+    error.value = e.message || '删除物料失败'
   }
 }
 
@@ -484,7 +606,7 @@ const sortedFunds = computed(() => {
       class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
       @click.self="closeModal"
     >
-      <div class="bg-canvas rounded-3xl border border-hairline w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+      <div class="bg-canvas rounded-3xl border border-hairline w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
         <h2 class="text-xl font-bold mb-6">{{ isEditing ? '编辑基金' : '新增基金' }}</h2>
 
         <form class="space-y-4" @submit.prevent="submitForm">
@@ -571,6 +693,32 @@ const sortedFunds = computed(() => {
           </div>
 
           <div>
+            <label class="block text-sm font-medium mb-2">资产配置（%）</label>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs text-muted mb-1 block">股票</label>
+                <input v-model="form.asset_stock_pct" type="number" min="0" max="100" step="0.01" class="input w-full" placeholder="0-100" />
+                <p v-if="formErrors.asset_stock_pct" class="text-up text-xs mt-1">{{ formErrors.asset_stock_pct }}</p>
+              </div>
+              <div>
+                <label class="text-xs text-muted mb-1 block">债券</label>
+                <input v-model="form.asset_bond_pct" type="number" min="0" max="100" step="0.01" class="input w-full" placeholder="0-100" />
+                <p v-if="formErrors.asset_bond_pct" class="text-up text-xs mt-1">{{ formErrors.asset_bond_pct }}</p>
+              </div>
+              <div>
+                <label class="text-xs text-muted mb-1 block">现金</label>
+                <input v-model="form.asset_cash_pct" type="number" min="0" max="100" step="0.01" class="input w-full" placeholder="0-100" />
+                <p v-if="formErrors.asset_cash_pct" class="text-up text-xs mt-1">{{ formErrors.asset_cash_pct }}</p>
+              </div>
+              <div>
+                <label class="text-xs text-muted mb-1 block">其他</label>
+                <input v-model="form.asset_other_pct" type="number" min="0" max="100" step="0.01" class="input w-full" placeholder="0-100" />
+                <p v-if="formErrors.asset_other_pct" class="text-up text-xs mt-1">{{ formErrors.asset_other_pct }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
             <label class="block text-sm font-medium mb-2">标签</label>
             <div v-if="tags.length === 0" class="text-sm text-muted">暂无可用标签，请先到“标签管理”添加</div>
             <div v-else class="space-y-3">
@@ -589,6 +737,45 @@ const sortedFunds = computed(() => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div v-if="isEditing" class="border-t border-hairline pt-4">
+            <label class="block text-sm font-medium mb-2">营销物料</label>
+            <div v-if="materials.length" class="space-y-2 mb-4">
+              <div
+                v-for="material in materials"
+                :key="material.id"
+                class="flex items-center justify-between p-3 rounded-xl bg-surface-soft border border-hairline"
+              >
+                <div>
+                  <p class="font-medium text-sm">{{ material.name }}</p>
+                  <p class="text-xs text-muted truncate max-w-xs">{{ material.material_type }} · {{ material.url }}</p>
+                </div>
+                <button type="button" class="text-up text-sm hover:underline" @click="deleteMaterial(material)">删除</button>
+              </div>
+            </div>
+            <div v-else class="text-sm text-muted mb-4">暂无营销物料</div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="md:col-span-2">
+                <input v-model="materialForm.name" type="text" class="input w-full" placeholder="物料名称，例如：产品一页通" />
+                <p v-if="materialFormErrors.name" class="text-up text-xs mt-1">{{ materialFormErrors.name }}</p>
+              </div>
+              <div>
+                <input v-model="materialForm.material_type" type="text" class="input w-full" placeholder="类型，例如：PDF" />
+                <p v-if="materialFormErrors.material_type" class="text-up text-xs mt-1">{{ materialFormErrors.material_type }}</p>
+              </div>
+              <div>
+                <input v-model="materialForm.size" type="text" class="input w-full" placeholder="大小，例如：2.5MB（可选）" />
+              </div>
+              <div class="md:col-span-2">
+                <input v-model="materialForm.url" type="url" class="input w-full" placeholder="外链地址，例如：https://..." />
+                <p v-if="materialFormErrors.url" class="text-up text-xs mt-1">{{ materialFormErrors.url }}</p>
+              </div>
+            </div>
+            <div class="mt-3">
+              <button type="button" class="btn-secondary text-sm" @click="submitMaterial">+ 添加物料</button>
             </div>
           </div>
 

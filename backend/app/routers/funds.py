@@ -2,21 +2,26 @@ from decimal import Decimal
 from typing import List, Optional, Union
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.database import get_db
 from app.models.fund import Fund, FundCode
+from app.models.material import FundMaterial, MaterialDownloadLog
 from app.models.performance import FundPerformance
 from app.models.tag import FundTag, Tag
 from app.models.tier import FundCurrentTier
 from app.models.user import User
 from app.schemas import (
+    FundCodeItem,
     FundCompareItem,
     FundCompareResponse,
     FundDetail,
     FundListItem,
+    MaterialCreateRequest,
+    MaterialDownloadResponse,
+    MaterialItem,
     NavHistoryItem,
     TagSummary,
 )
@@ -199,6 +204,7 @@ def compare_funds(
                 name=fund.name,
                 code=code.code,
                 category=fund.category,
+                risk_level=fund.risk_level,
                 nav=_to_float(perf.nav) if perf else None,
                 daily_return=_to_float(perf.daily_return) if perf else None,
                 current_tier=fund.tier.current_tier if fund.tier else None,
@@ -217,20 +223,107 @@ def get_fund(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    row = _base_fund_query(db).filter(Fund.id == fund_id).first()
-    if not row:
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
         raise HTTPException(status_code=404, detail="Fund not found")
-    fund, code, perf = row
+
+    codes = (
+        db.query(FundCode)
+        .filter(FundCode.fund_id == fund_id)
+        .order_by(FundCode.is_primary.desc(), FundCode.code)
+        .all()
+    )
+    primary_code = next((c for c in codes if c.is_primary), codes[0] if codes else None)
+
+    perf = None
+    if primary_code:
+        perf = (
+            db.query(FundPerformance)
+            .filter(FundPerformance.fund_code_id == primary_code.id)
+            .order_by(FundPerformance.date.desc())
+            .first()
+        )
+
     return FundDetail(
         id=fund.id,
         name=fund.name,
-        code=code.code,
+        code=primary_code.code if primary_code else "",
+        codes=[
+            FundCodeItem(id=c.id, code=c.code, market=c.market, is_primary=c.is_primary)
+            for c in codes
+        ],
         category=fund.category,
+        risk_level=fund.risk_level,
+        manager=fund.manager,
+        manager_start_date=fund.manager_start_date,
+        establish_date=fund.establish_date,
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
+        return_1y=_to_float(perf.return_1y) if perf else None,
+        return_3y=_to_float(perf.return_3y) if perf else None,
+        sharpe=_to_float(perf.sharpe) if perf else None,
+        max_drawdown=_to_float(perf.max_drawdown) if perf else None,
+        aum=_to_float(perf.aum) if perf else None,
+        rank_percentile=_to_float(perf.rank_percentile) if perf else None,
         current_tier=fund.tier.current_tier if fund.tier else None,
+        reason=fund.reason,
+        target_clients=fund.target_clients,
+        asset_stock_pct=_to_float(fund.asset_stock_pct),
+        asset_bond_pct=_to_float(fund.asset_bond_pct),
+        asset_cash_pct=_to_float(fund.asset_cash_pct),
+        asset_other_pct=_to_float(fund.asset_other_pct),
         tags=_tag_summaries(db, fund.id),
     )
+
+
+@router.get("/{fund_id}/materials", response_model=List[MaterialItem])
+def list_fund_materials(
+    fund_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+
+    materials = (
+        db.query(FundMaterial)
+        .filter(FundMaterial.fund_id == fund_id)
+        .order_by(FundMaterial.created_at.desc())
+        .all()
+    )
+    return [
+        MaterialItem(
+            id=m.id,
+            name=m.name,
+            material_type=m.material_type,
+            url=m.url,
+            size=m.size,
+        )
+        for m in materials
+    ]
+
+
+@router.post("/materials/{material_id}/download", response_model=MaterialDownloadResponse)
+def download_material(
+    material_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    material = db.query(FundMaterial).filter(FundMaterial.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    log = MaterialDownloadLog(
+        material_id=material.id,
+        user_id=user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    db.add(log)
+    db.commit()
+
+    return MaterialDownloadResponse(download_url=material.url)
 
 
 @router.get("/{fund_id}/nav", response_model=List[NavHistoryItem])

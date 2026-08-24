@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Date
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Date, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -22,6 +22,10 @@ class Fund(Base):
     establish_date = Column(Date, nullable=True)
     reason = Column(String(2000), nullable=True)
     target_clients = Column(String(500), nullable=True)
+    asset_stock_pct = Column(Numeric(5, 2), nullable=True)
+    asset_bond_pct = Column(Numeric(5, 2), nullable=True)
+    asset_cash_pct = Column(Numeric(5, 2), nullable=True)
+    asset_other_pct = Column(Numeric(5, 2), nullable=True)
     status = Column(String(16), default="active", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

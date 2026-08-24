@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.daily_tier_suggestion import DailyTierSuggestion
 from app.models.fund import Fund, FundCode
 from app.models.performance import FundPerformance
+from app.models.material import FundMaterial
 from app.models.sync import SyncLog
 from app.models.tag import FundTag, Tag
 from app.models.tier import FundCurrentTier, FundTierHistory, TIER_OPTIONS
@@ -23,6 +24,8 @@ from app.schemas import (
     FundCreateRequest,
     FundUpdateRequest,
     Market,
+    MaterialCreateRequest,
+    MaterialItem,
     ScoreInfo,
     ScoringRunResponse,
     StableApplyResponse,
@@ -302,6 +305,57 @@ def update_fund(
         _tag_summaries(db, fund.id),
         scoring_reason,
     )
+
+
+@router.post("/funds/{fund_id}/materials", response_model=MaterialItem, status_code=status.HTTP_201_CREATED)
+def create_fund_material(
+    fund_id: UUID,
+    payload: MaterialCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    fund = db.query(Fund).filter(Fund.id == fund_id).first()
+    if not fund:
+        raise HTTPException(status_code=404, detail="Fund not found")
+
+    material = FundMaterial(
+        fund_id=fund_id,
+        name=payload.name,
+        material_type=payload.material_type,
+        url=payload.url,
+        size=payload.size,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+
+    return MaterialItem(
+        id=material.id,
+        name=material.name,
+        material_type=material.material_type,
+        url=material.url,
+        size=material.size,
+    )
+
+
+@router.delete("/funds/{fund_id}/materials/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_fund_material(
+    fund_id: UUID,
+    material_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    material = (
+        db.query(FundMaterial)
+        .filter(FundMaterial.id == material_id, FundMaterial.fund_id == fund_id)
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    db.delete(material)
+    db.commit()
+    return None
 
 
 @router.delete("/funds/{fund_id}", status_code=status.HTTP_204_NO_CONTENT)
