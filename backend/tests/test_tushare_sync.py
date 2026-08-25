@@ -236,3 +236,59 @@ def test_update_rank_percentile_within_category(db):
     db.refresh(perf_a)
     # Fund A's return is higher than its only peer -> 100th percentile
     assert float(perf_a.rank_percentile) == 1.0
+
+
+def test_update_fund_manager_clears_company_name_when_no_person_in_tushare(db, monkeypatch):
+    monkeypatch.setattr("app.services.tushare_sync.settings.TUSHARE_TOKEN", "test-token")
+
+    fund = Fund(
+        name="经理基金4",
+        category="主动权益",
+        risk_level="中",
+        manager="某基金管理有限责任公司",
+    )
+    db.add(fund)
+    db.flush()
+    code = FundCode(fund_id=fund.id, code="000009", market="OF", is_primary=True)
+    db.add(code)
+    db.commit()
+
+    manager_df = pd.DataFrame({
+        "name": ["某基金管理有限责任公司"],
+        "begin_date": ["20230101"],
+        "end_date": [None],
+    })
+    mock_pro = Mock()
+    mock_pro.fund_manager.return_value = manager_df
+
+    with patch("app.services.tushare_sync.ts.pro_api", return_value=mock_pro):
+        result = _update_fund_manager(db, fund.id)
+
+    db.refresh(fund)
+    assert fund.manager is None
+    assert "cleared" in result
+
+
+def test_update_fund_manager_prefers_current_person_over_historical_company(db, monkeypatch):
+    monkeypatch.setattr("app.services.tushare_sync.settings.TUSHARE_TOKEN", "test-token")
+
+    fund = Fund(name="经理基金5", category="主动权益", risk_level="中")
+    db.add(fund)
+    db.flush()
+    code = FundCode(fund_id=fund.id, code="000010", market="OF", is_primary=True)
+    db.add(code)
+    db.commit()
+
+    manager_df = pd.DataFrame({
+        "name": ["某基金管理有限责任公司", "赵经理"],
+        "begin_date": ["20200101", "20240101"],
+        "end_date": ["20231231", None],
+    })
+    mock_pro = Mock()
+    mock_pro.fund_manager.return_value = manager_df
+
+    with patch("app.services.tushare_sync.ts.pro_api", return_value=mock_pro):
+        _update_fund_manager(db, fund.id)
+
+    db.refresh(fund)
+    assert fund.manager == "赵经理"
