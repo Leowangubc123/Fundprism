@@ -19,8 +19,16 @@ def _to_decimal(value) -> Optional[Decimal]:
 
 
 def compute_rolling_return(nav_values: List[Decimal], window: int) -> Optional[Decimal]:
-    """Compute (latest / first - 1) for a window of NAV values."""
-    if len(nav_values) < window or nav_values[0] == 0:
+    """Compute (latest / first - 1) for the trailing window of NAV values."""
+    if len(nav_values) < window or nav_values[-window] == 0:
+        return None
+    window_values = nav_values[-window:]
+    return (window_values[-1] - window_values[0]) / window_values[0]
+
+
+def compute_inception_return(nav_values: List[Decimal]) -> Optional[Decimal]:
+    """Compute (latest / first - 1) over the full history."""
+    if len(nav_values) < 2 or nav_values[0] == 0:
         return None
     return (nav_values[-1] - nav_values[0]) / nav_values[0]
 

@@ -126,6 +126,48 @@ def test_update_fund_aum_from_share(db, monkeypatch):
     assert perf.aum == Decimal("1000000000")
 
 
+def test_update_fund_aum_stores_on_latest_record_for_old_share_date(db, monkeypatch):
+    monkeypatch.setattr("app.services.tushare_sync.settings.TUSHARE_TOKEN", "test-token")
+
+    fund = Fund(name="规模基金2", category="主动权益", risk_level="中")
+    db.add(fund)
+    db.flush()
+    code = FundCode(fund_id=fund.id, code="000011", market="OF", is_primary=True)
+    db.add(code)
+    db.commit()
+
+    # Latest NAV is newer than the share report date.
+    old_perf = FundPerformance(
+        fund_code_id=code.id,
+        date=date(2026, 6, 30),
+        nav=Decimal("2.0000"),
+    )
+    new_perf = FundPerformance(
+        fund_code_id=code.id,
+        date=date(2026, 8, 25),
+        nav=Decimal("2.1000"),
+    )
+    db.add_all([old_perf, new_perf])
+    db.commit()
+
+    share_df = pd.DataFrame({
+        "trade_date": ["20260630"],
+        "fd_share": ["50000"],  # 50000 万份
+    })
+    mock_pro = Mock()
+    mock_pro.fund_share.return_value = share_df
+
+    with patch("app.services.tushare_sync.ts.pro_api", return_value=mock_pro):
+        _update_fund_aum(db, code)
+
+    db.refresh(new_perf)
+    # AUM should be stored on the latest NAV record using the share data.
+    assert new_perf.aum == Decimal("1050000000")
+
+    db.refresh(old_perf)
+    assert old_perf.aum is None
+
+
 def test_update_fund_manager_from_tushare(db, monkeypatch):
     monkeypatch.setattr("app.services.tushare_sync.settings.TUSHARE_TOKEN", "test-token")
 

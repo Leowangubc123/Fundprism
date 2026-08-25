@@ -301,35 +301,24 @@ def _update_fund_aum(db: Session, primary_code: FundCode) -> Optional[str]:
     if share is None:
         return f"AUM skipped: no share column (have {list(df.columns)})"
 
-    # Use latest NAV on or before the share report date.
-    query = (
+    # Store the AUM on the most recent NAV record so the detail page shows
+    # current fund size. Use the latest NAV available as the best estimate.
+    latest_perf = (
         db.query(FundPerformance)
         .filter(
             FundPerformance.fund_code_id == primary_code.id,
             FundPerformance.nav.isnot(None),
         )
         .order_by(FundPerformance.date.desc())
+        .first()
     )
-    if share_date:
-        query = query.filter(FundPerformance.date <= share_date)
-    latest_perf = query.first()
-
     if not latest_perf:
-        # Fallback to the most recent NAV regardless of date.
-        latest_perf = (
-            db.query(FundPerformance)
-            .filter(FundPerformance.fund_code_id == primary_code.id)
-            .order_by(FundPerformance.date.desc())
-            .first()
-        )
+        return "AUM skipped: no NAV"
 
-    if latest_perf and latest_perf.nav:
-        # fd_share is in 万份; convert to shares then multiply by NAV.
-        latest_perf.aum = share * SHARE_UNIT * latest_perf.nav
-        db.commit()
-        return "AUM updated"
-
-    return "AUM skipped: no NAV to pair with share"
+    # fd_share is in 万份; convert to shares then multiply by NAV.
+    latest_perf.aum = share * SHARE_UNIT * latest_perf.nav
+    db.commit()
+    return f"AUM updated (share_date={share_date})"
 
 
 def _update_rank_percentile(db: Session, fund_id: UUID) -> Optional[str]:
