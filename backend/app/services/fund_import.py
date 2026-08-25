@@ -160,11 +160,10 @@ def import_funds_from_excel(db: Session, content: bytes) -> Dict:
             continue
 
         # Try to fill missing basic info from Tushare
-        if not name or not manager or not category or not establish_date:
+        if not name or not category or not establish_date:
             basic = _lookup_basic(code, market)
             if basic:
                 name = name or basic.get("name")
-                manager = manager or basic.get("management")
                 category = category or basic.get("fund_type")
                 establish_date = establish_date or basic.get("found_date")
 

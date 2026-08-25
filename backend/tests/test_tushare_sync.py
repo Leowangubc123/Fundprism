@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -31,16 +31,62 @@ def test_get_start_date_returns_far_past_for_empty_history(db):
     assert (date.today() - start).days >= 1000
 
 
-def test_get_start_date_returns_day_after_latest_record(db):
-    fund = Fund(name="老基金", category="主动权益", risk_level="中")
+def test_get_start_date_uses_establish_date_for_older_fund(db):
+    fund = Fund(
+        name="老基金",
+        category="主动权益",
+        risk_level="中",
+        establish_date=date(2022, 1, 26),
+    )
     db.add(fund)
     db.flush()
     code = FundCode(fund_id=fund.id, code="000002", market="OF", is_primary=True)
     db.add(code)
     db.commit()
 
-    perf = FundPerformance(fund_code_id=code.id, date=date(2026, 7, 1), nav=Decimal("1.0"))
+    start = _get_start_date(db, code.id, fund.establish_date)
+    assert start == date(2022, 1, 26)
+
+
+def test_get_start_date_backfills_short_history(db):
+    fund = Fund(
+        name="需回填基金",
+        category="主动权益",
+        risk_level="中",
+        establish_date=date(2022, 1, 26),
+    )
+    db.add(fund)
+    db.flush()
+    code = FundCode(fund_id=fund.id, code="000003", market="OF", is_primary=True)
+    db.add(code)
+    db.commit()
+
+    # Only 30 days of history
+    perf = FundPerformance(
+        fund_code_id=code.id,
+        date=date.today() - timedelta(days=30),
+        nav=Decimal("1.0"),
+    )
     db.add(perf)
+    db.commit()
+
+    start = _get_start_date(db, code.id, fund.establish_date)
+    assert start == date(2022, 1, 26)
+
+
+def test_get_start_date_returns_day_after_latest_record_when_history_complete(db):
+    fund = Fund(name="完整历史基金", category="主动权益", risk_level="中")
+    db.add(fund)
+    db.flush()
+    code = FundCode(fund_id=fund.id, code="000004", market="OF", is_primary=True)
+    db.add(code)
+    db.commit()
+
+    perfs = [
+        FundPerformance(fund_code_id=code.id, date=date(2020, 1, 1), nav=Decimal("1.0")),
+        FundPerformance(fund_code_id=code.id, date=date(2026, 7, 1), nav=Decimal("1.1")),
+    ]
+    db.add_all(perfs)
     db.commit()
 
     start = _get_start_date(db, code.id)

@@ -76,17 +76,42 @@ def _looks_like_company_name(name: Optional[str]) -> bool:
     return any(keyword in name for keyword in keywords)
 
 
-def _get_start_date(db: Session, fund_code_id: UUID) -> date:
-    latest = (
+def _get_start_date(
+    db: Session,
+    fund_code_id: UUID,
+    establish_date: Optional[date] = None,
+) -> date:
+    """Determine the start date for NAV fetch.
+
+    For new funds, fetch from establishment date (or ~3 years ago).
+    For existing funds with incomplete history, backfill to the target start.
+    """
+    performances = (
         db.query(FundPerformance)
         .filter(FundPerformance.fund_code_id == fund_code_id)
-        .order_by(FundPerformance.date.desc())
-        .first()
+        .order_by(FundPerformance.date.asc())
+        .all()
     )
-    if latest and latest.date:
-        return latest.date + timedelta(days=1)
-    # Initial sync: fetch enough history for 3-year metrics.
-    return datetime.utcnow().date() - timedelta(days=INITIAL_SYNC_DAYS)
+
+    today = datetime.utcnow().date()
+    target_start = today - timedelta(days=INITIAL_SYNC_DAYS)
+    if establish_date and establish_date < target_start:
+        # Fund is older than 3 years; fetch from establishment so
+        # return-inception and full history are accurate.
+        target_start = establish_date
+
+    if not performances:
+        return target_start
+
+    earliest = performances[0].date
+    latest = performances[-1].date
+
+    # Already have enough history; incremental sync only.
+    if earliest and earliest <= target_start:
+        return latest + timedelta(days=1)
+
+    # Existing data starts too recently; backfill to target_start.
+    return target_start
 
 
 def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
@@ -106,7 +131,7 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
         raise HTTPException(status_code=400, detail="Fund has no primary code")
 
     ts_code = f"{primary_code.code}.{primary_code.market}"
-    start_date = _get_start_date(db, primary_code.id)
+    start_date = _get_start_date(db, primary_code.id, fund.establish_date)
     end_date = datetime.utcnow().date()
 
     sync_log = SyncLog(
@@ -381,20 +406,37 @@ def _update_fund_manager(db: Session, fund_id: UUID) -> Optional[str]:
     if not name_col:
         return f"manager skipped: no name column (have {list(df.columns)})"
 
-    # Prefer rows with no end_date (current managers).
+    # Prefer rows with no end_date (current managers) and a person-like name.
+    person_rows = [row for _, row in df.iterrows() if not _looks_like_company_name(_str(row.get(name_col)))]
+
     current_rows = []
-    for _, row in df.iterrows():
+    for row in person_rows:
         end_val = row.get(end_col) if end_col else None
         if end_val is None or str(end_val).strip() == "":
             current_rows.append(row)
 
-    if not current_rows:
-        # Fall back to the most recent manager by begin_date.
+    selected = None
+    if current_rows:
+        selected = current_rows[0]
+    elif person_rows:
+        # Fall back to the most recent person manager by begin_date.
         if begin_col and begin_col in df.columns:
-            df = df.sort_values(by=begin_col, ascending=False).reset_index(drop=True)
-        current_rows = [df.iloc[0]]
+            sorted_df = df[df[name_col].apply(lambda x: not _looks_like_company_name(_str(x)))].sort_values(
+                by=begin_col, ascending=False
+            ).reset_index(drop=True)
+            if not sorted_df.empty:
+                selected = sorted_df.iloc[0]
+        if selected is None:
+            selected = person_rows[0]
 
-    selected = current_rows[0]
+    if selected is None:
+        # No person manager available; clear a company-name placeholder if present.
+        if fund.manager and _looks_like_company_name(fund.manager):
+            fund.manager = None
+            db.commit()
+            return "manager cleared: company-name placeholder removed"
+        return "manager skipped: no person manager data"
+
     manager_name = _str(selected.get(name_col))
     begin_date = _parse_date(selected.get(begin_col)) if begin_col else None
 
