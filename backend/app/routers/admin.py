@@ -208,7 +208,7 @@ def lookup_fund(
     return FundBasicLookupResponse(
         ts_code=result.get("ts_code") or f"{code}.{market.value}",
         name=result.get("name") or "",
-        manager=result.get("management"),
+        management=result.get("management"),
         category=normalize_category(result.get("fund_type")) or result.get("fund_type"),
         establish_date=result.get("found_date"),
         market=market.value,

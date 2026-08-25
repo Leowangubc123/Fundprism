@@ -305,7 +305,7 @@ async function submitForm() {
 
 async function fetchMaterials(fundId) {
   try {
-    const res = await fetchApi(`/api/admin/funds/${fundId}/materials`)
+    const res = await fetchApi(`/api/funds/${fundId}/materials`)
     if (!res.ok) throw new Error('加载物料失败')
     materials.value = await res.json()
   } catch (e) {
@@ -392,7 +392,6 @@ async function lookupFund() {
     if (!res.ok) throw new Error(data.detail || '查询失败')
 
     if (data.name) form.name = data.name
-    if (data.manager) form.manager = data.manager
     if (data.category) form.category = data.category
     if (data.establish_date) form.establish_date = data.establish_date
 

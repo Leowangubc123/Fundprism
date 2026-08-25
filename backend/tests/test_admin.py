@@ -139,7 +139,7 @@ def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
     mock_df = pd.DataFrame({
         "ts_code": ["000006.OF"],
         "name": ["测试基金"],
-        "management": ["测试经理"],
+        "management": ["测试管理公司"],
         "fund_type": ["主动权益"],
         "found_date": ["20200101"],
         "market": ["OF"],
@@ -154,7 +154,7 @@ def test_lookup_fund_from_tushare(client, admin_headers, monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "测试基金"
-    assert data["manager"] == "测试经理"
+    assert data["management"] == "测试管理公司"
     assert data["category"] == "主动权益"
     assert data["market"] == "OF"
 

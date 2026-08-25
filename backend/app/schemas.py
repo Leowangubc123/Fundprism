@@ -218,7 +218,7 @@ class TierUpdateRequest(BaseModel):
 class FundBasicLookupResponse(BaseModel):
     ts_code: str
     name: str
-    manager: Optional[str]
+    management: Optional[str] = None
     category: Optional[str]
     establish_date: Optional[date]
     market: str
