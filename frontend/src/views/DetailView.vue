@@ -184,6 +184,10 @@ onMounted(fetchDetail)
           <p :class="fund.return_3y >= 0 ? 'text-up' : 'text-down'" class="font-semibold">{{ formatReturn(fund.return_3y) }}</p>
         </div>
         <div class="card p-4">
+          <p class="text-xs text-muted mb-1">成立以来收益</p>
+          <p :class="fund.return_inception >= 0 ? 'text-up' : 'text-down'" class="font-semibold">{{ formatReturn(fund.return_inception) }}</p>
+        </div>
+        <div class="card p-4">
           <p class="text-xs text-muted mb-1">夏普比率</p>
           <p class="font-semibold">{{ fund.sharpe?.toFixed(2) ?? '-' }}</p>
         </div>

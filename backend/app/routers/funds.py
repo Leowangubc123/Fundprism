@@ -236,6 +236,7 @@ def get_fund(
     primary_code = next((c for c in codes if c.is_primary), codes[0] if codes else None)
 
     perf = None
+    first_perf = None
     if primary_code:
         perf = (
             db.query(FundPerformance)
@@ -243,6 +244,19 @@ def get_fund(
             .order_by(FundPerformance.date.desc())
             .first()
         )
+        first_perf = (
+            db.query(FundPerformance)
+            .filter(
+                FundPerformance.fund_code_id == primary_code.id,
+                FundPerformance.nav.isnot(None),
+            )
+            .order_by(FundPerformance.date.asc())
+            .first()
+        )
+
+    return_inception = None
+    if perf and first_perf and first_perf.nav and perf.nav and first_perf.nav != 0:
+        return_inception = float((perf.nav - first_perf.nav) / first_perf.nav)
 
     return FundDetail(
         id=fund.id,
@@ -259,6 +273,7 @@ def get_fund(
         establish_date=fund.establish_date,
         nav=_to_float(perf.nav) if perf else None,
         daily_return=_to_float(perf.daily_return) if perf else None,
+        return_inception=return_inception,
         return_1y=_to_float(perf.return_1y) if perf else None,
         return_3y=_to_float(perf.return_3y) if perf else None,
         sharpe=_to_float(perf.sharpe) if perf else None,

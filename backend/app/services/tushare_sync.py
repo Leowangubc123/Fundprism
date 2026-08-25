@@ -59,7 +59,7 @@ def _parse_nav(row) -> Optional[Decimal]:
 
 
 def _parse_share(row) -> Optional[Decimal]:
-    for key in ("fd_share", "share", "fund_share", "shares"):
+    for key in ("fd_share", "fd_share_total", "share", "fund_share", "shares", "total_share"):
         value = row.get(key)
         if value is not None:
             try:
@@ -67,6 +67,13 @@ def _parse_share(row) -> Optional[Decimal]:
             except Exception:
                 continue
     return None
+
+
+def _looks_like_company_name(name: Optional[str]) -> bool:
+    if not name:
+        return False
+    keywords = ("公司", "有限责任", "股份", "资管", "基金", "投资", "资产", "证券", "信托")
+    return any(keyword in name for keyword in keywords)
 
 
 def _get_start_date(db: Session, fund_code_id: UUID) -> date:
@@ -195,9 +202,11 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
     db.commit()
 
     _update_fund_metrics(db, primary_code.id)
-    _update_fund_aum(db, primary_code)
-    _update_rank_percentile(db, fund_id)
-    _update_fund_manager(db, fund_id)
+    extra_messages = [
+        _update_fund_aum(db, primary_code),
+        _update_rank_percentile(db, fund_id),
+        _update_fund_manager(db, fund_id),
+    ]
 
     total = records_created + records_updated
     sync_log.status = "success"
@@ -205,11 +214,16 @@ def sync_fund_nav(db: Session, fund_id: UUID) -> dict:
     sync_log.ended_at = datetime.utcnow()
     db.commit()
 
+    message = f"Created {records_created}, updated {records_updated} NAV records"
+    for m in extra_messages:
+        if m:
+            message += f"; {m}"
+
     return {
         "fund_id": fund_id,
         "status": "success",
         "records_count": total,
-        "message": f"Created {records_created}, updated {records_updated} NAV records",
+        "message": message,
     }
 
 
@@ -232,20 +246,20 @@ def _update_fund_metrics(db: Session, fund_code_id: UUID) -> None:
     db.commit()
 
 
-def _update_fund_aum(db: Session, primary_code: FundCode) -> None:
+def _update_fund_aum(db: Session, primary_code: FundCode) -> Optional[str]:
     """Fetch latest fund share and estimate AUM = share * latest NAV."""
     if not settings.TUSHARE_TOKEN:
-        return
+        return "AUM skipped: no TUSHARE_TOKEN"
 
     ts_code = f"{primary_code.code}.{primary_code.market}"
     try:
         pro = ts.pro_api(settings.TUSHARE_TOKEN)
         df = pro.fund_share(ts_code=ts_code)
-    except Exception:
-        return
+    except Exception as exc:
+        return f"AUM failed: {exc}"
 
     if df is None or df.empty:
-        return
+        return "AUM skipped: no share data"
 
     date_col = None
     for candidate in ("trade_date", "end_date", "nav_date", "date"):
@@ -253,14 +267,14 @@ def _update_fund_aum(db: Session, primary_code: FundCode) -> None:
             date_col = candidate
             break
     if date_col is None:
-        return
+        return f"AUM skipped: no date column (have {list(df.columns)})"
 
     df = df.sort_values(by=date_col, ascending=False).reset_index(drop=True)
     latest_row = df.iloc[0]
     share_date = _parse_date(latest_row[date_col])
     share = _parse_share(latest_row)
     if share is None:
-        return
+        return f"AUM skipped: no share column (have {list(df.columns)})"
 
     # Use latest NAV on or before the share report date.
     query = (
@@ -288,13 +302,16 @@ def _update_fund_aum(db: Session, primary_code: FundCode) -> None:
         # fd_share is in 万份; convert to shares then multiply by NAV.
         latest_perf.aum = share * SHARE_UNIT * latest_perf.nav
         db.commit()
+        return "AUM updated"
+
+    return "AUM skipped: no NAV to pair with share"
 
 
-def _update_rank_percentile(db: Session, fund_id: UUID) -> None:
+def _update_rank_percentile(db: Session, fund_id: UUID) -> Optional[str]:
     """Compute 1-year return percentile within the same category."""
     fund = db.query(Fund).filter(Fund.id == fund_id).first()
     if not fund or not fund.category:
-        return
+        return "rank skipped: no category"
 
     primary_code = (
         db.query(FundCode)
@@ -302,7 +319,7 @@ def _update_rank_percentile(db: Session, fund_id: UUID) -> None:
         .first()
     )
     if not primary_code:
-        return
+        return "rank skipped: no primary code"
 
     latest_perf = (
         db.query(FundPerformance)
@@ -311,7 +328,7 @@ def _update_rank_percentile(db: Session, fund_id: UUID) -> None:
         .first()
     )
     if not latest_perf or latest_perf.return_1y is None:
-        return
+        return "rank skipped: no 1-year return"
 
     peer_rows = (
         db.query(FundPerformance.return_1y)
@@ -324,20 +341,21 @@ def _update_rank_percentile(db: Session, fund_id: UUID) -> None:
     )
     values = [float(r.return_1y) for r in peer_rows]
     if len(values) < 1:
-        return
+        return "rank skipped: no peers"
 
     target = float(latest_perf.return_1y)
     lower_count = sum(1 for v in values if v < target)
     percentile = Decimal(str(lower_count / len(values)))
     latest_perf.rank_percentile = percentile
     db.commit()
+    return f"rank percentile {float(percentile):.0%}"
 
 
-def _update_fund_manager(db: Session, fund_id: UUID) -> None:
+def _update_fund_manager(db: Session, fund_id: UUID) -> Optional[str]:
     """Fetch current fund manager from Tushare and update Fund fields."""
     fund = db.query(Fund).filter(Fund.id == fund_id).first()
     if not fund:
-        return
+        return "manager skipped: fund not found"
 
     primary_code = (
         db.query(FundCode)
@@ -345,23 +363,23 @@ def _update_fund_manager(db: Session, fund_id: UUID) -> None:
         .first()
     )
     if not primary_code:
-        return
+        return "manager skipped: no primary code"
 
     ts_code = f"{primary_code.code}.{primary_code.market}"
     try:
         pro = ts.pro_api(settings.TUSHARE_TOKEN)
         df = pro.fund_manager(ts_code=ts_code)
-    except Exception:
-        return
+    except Exception as exc:
+        return f"manager failed: {exc}"
 
     if df is None or df.empty:
-        return
+        return "manager skipped: no manager data"
 
     name_col = next((c for c in df.columns if c in ("name", "manager_name")), None)
     begin_col = "begin_date" if "begin_date" in df.columns else None
     end_col = "end_date" if "end_date" in df.columns else None
     if not name_col:
-        return
+        return f"manager skipped: no name column (have {list(df.columns)})"
 
     # Prefer rows with no end_date (current managers).
     current_rows = []
@@ -380,18 +398,21 @@ def _update_fund_manager(db: Session, fund_id: UUID) -> None:
     manager_name = _str(selected.get(name_col))
     begin_date = _parse_date(selected.get(begin_col)) if begin_col else None
 
-    def _looks_like_company_name(name: Optional[str]) -> bool:
-        if not name:
-            return False
-        return any(keyword in name for keyword in ("公司", "有限责任", "股份", "资管", "基金"))
+    if not manager_name:
+        return "manager skipped: empty manager name"
 
-    if manager_name:
-        if not fund.manager or _looks_like_company_name(fund.manager):
-            fund.manager = manager_name
-    if begin_date:
-        if not fund.manager_start_date:
-            fund.manager_start_date = begin_date
+    updated = []
+    if not fund.manager or _looks_like_company_name(fund.manager):
+        fund.manager = manager_name
+        updated.append("manager")
+    if begin_date and not fund.manager_start_date:
+        fund.manager_start_date = begin_date
+        updated.append("manager_start_date")
     db.commit()
+
+    if updated:
+        return f"manager updated: {', '.join(updated)}"
+    return "manager unchanged"
 
 
 def lookup_fund_basic(code: str, market: str) -> dict:

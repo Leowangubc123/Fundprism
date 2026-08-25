@@ -282,6 +282,7 @@ class FundDetail(BaseModel):
     establish_date: Optional[date] = None
     nav: Optional[float] = None
     daily_return: Optional[float] = None
+    return_inception: Optional[float] = None
     return_1y: Optional[float] = None
     return_3y: Optional[float] = None
     sharpe: Optional[float] = None

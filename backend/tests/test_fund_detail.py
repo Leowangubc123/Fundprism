@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
+
 from app.models.fund import Fund, FundCode
 from app.models.material import FundMaterial, MaterialDownloadLog
 from app.models.performance import FundPerformance
@@ -39,6 +41,11 @@ def test_get_fund_detail_returns_full_fields(client, auth_headers, db):
     db.flush()
     db.add(FundTag(fund_id=fund.id, tag_id=tag.id))
 
+    first_perf = FundPerformance(
+        fund_code_id=code_a.id,
+        date=date(2020, 1, 2),
+        nav=Decimal("1.0000"),
+    )
     perf = FundPerformance(
         fund_code_id=code_a.id,
         date=date(2026, 8, 10),
@@ -51,7 +58,7 @@ def test_get_fund_detail_returns_full_fields(client, auth_headers, db):
         aum=Decimal("1234567890.1234"),
         rank_percentile=Decimal("0.25"),
     )
-    db.add(perf)
+    db.add_all([first_perf, perf])
     db.commit()
 
     res = client.get(f"/api/funds/{fund.id}", headers=auth_headers)
@@ -70,6 +77,7 @@ def test_get_fund_detail_returns_full_fields(client, auth_headers, db):
     assert data["current_tier"] == "主推"
     assert data["nav"] == 1.2345
     assert data["daily_return"] == 0.0123
+    assert data["return_inception"] == pytest.approx(0.2345, rel=1e-4)
     assert data["return_1y"] == 0.15
     assert data["return_3y"] == 0.45
     assert data["sharpe"] == 1.23
