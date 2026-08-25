@@ -11,6 +11,7 @@ const showModal = ref(false)
 const isEditing = ref(false)
 const editingFundId = ref(null)
 const syncingId = ref(null)
+const syncingAll = ref(false)
 const scoring = ref(false)
 const showTierModal = ref(false)
 const tierEditingFund = ref(null)
@@ -464,6 +465,23 @@ async function runScoring() {
   }
 }
 
+async function syncAllFunds() {
+  error.value = ''
+  message.value = ''
+  syncingAll.value = true
+  try {
+    const res = await fetchApi('/api/admin/sync/run', { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || '同步失败')
+    message.value = `${data.message || `同步完成：${data.successful}/${data.total} 只基金成功`}`
+    await fetchFunds()
+  } catch (e) {
+    error.value = e.message || '同步失败'
+  } finally {
+    syncingAll.value = false
+  }
+}
+
 async function applySuggested(fund) {
   if (!fund.suggested_tier) {
     error.value = '该基金暂无系统建议等级'
@@ -499,6 +517,7 @@ const sortedFunds = computed(() => {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">基金管理</h1>
       <div class="flex gap-3">
+        <button type="button" class="btn-secondary" :disabled="syncingAll" @click="syncAllFunds">{{ syncingAll ? '同步中...' : '一键同步' }}</button>
         <button type="button" class="btn-secondary" :disabled="scoring" @click="runScoring">{{ scoring ? '评分中...' : '重新评分' }}</button>
         <button type="button" class="btn-primary" @click="openCreate">+ 新增基金</button>
       </div>
